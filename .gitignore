@@ -36,11 +36,10 @@ metadata.json
 # `git status` riuh dan rawan jadi sumber konflik.
 *.tsbuildinfo
 
-# Model OCR (13 MB). Tidak di-deploy ke Vercel sejak captcha produksi diubah manual
-# (lihat `OCR_LOKAL` di `WebPresensi.tsx`). `ocr_service.py` mengunduh sendiri ke
-# `.cache/` untuk `npm run dev`; folder `api/model/` hanya perlu diisi kalau
-# menjalankan versi Node.js dari `src/serverless/ocr.ts` secara lokal.
+# Local development caches and OCR data (never bundle in Tauri/Vercel)
+.cache/
 api/model/
+*.onnx
 
 # Tauri generated artifacts
 src-tauri/target/
@@ -49,7 +48,8 @@ src-tauri/gen/
 # Android signing and generated artifacts
 *.jks
 *.keystore
-android/.gradle/
+src-tauri/gen/android/
+oid/.gradle/
 android/build/
 android/app/build/
 android/app/release/

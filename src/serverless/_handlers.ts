@@ -32,7 +32,7 @@
  * 2. Menghapus berkasnya menghapus satu-satunya jalan mengembalikan OCR kalau
  *    nanti dibutuhkan. Yang mahal adalah *deploy*-nya, dan itu sudah dihentikan.
  */
-const BUKAN_HANDLER = new Set(['build.mts', '_handlers.ts', 'ocr.ts']);
+const BUKAN_HANDLER = new Set(['build.mts', '_handlers.ts']);
 
 /**
  * Nama handler tanpa ekstensi  persis nama berkas di `api/`.

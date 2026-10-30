@@ -1,0 +1,21 @@
+[package]
+name = "prabawa"
+version = "1.0.0"
+description = "PRABAWA — Portal Presensi Jawa Timur"
+authors = ["PRABAWA"]
+edition = "2021"
+
+[lib]
+name = "prabawa_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-shell = "2"
+
+[features]
+custom-protocol = ["tauri/custom-protocol"]
+default = ["custom-protocol"]

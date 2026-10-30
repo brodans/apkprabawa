@@ -21,6 +21,8 @@
   }
 
   body {
+    background: #ffffff;
+    color: #0f172a;
     font-family: var(--font-sans);
     font-size: 16px;
     -webkit-font-smoothing: antialiased;
@@ -33,6 +35,11 @@
     /* Hilangkan highlight biru saat tap di mobile */
     -webkit-tap-highlight-color: transparent;
     overflow-x: hidden;
+  }
+
+  html.dark body {
+    background: #0f172a;
+    color: #e2e8f0;
   }
 
   @media (pointer: coarse) {

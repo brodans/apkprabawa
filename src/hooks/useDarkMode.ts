@@ -23,6 +23,9 @@ export function useDarkMode() {
     const root = window.document.documentElement;
     const metaThemeColor = document.getElementById('theme-color-meta') || document.querySelector('meta[name="theme-color"]');
 
+    root.style.colorScheme = isDarkMode ? 'dark' : 'light';
+    document.body.dataset.theme = isDarkMode ? 'dark' : 'light';
+
     if (isDarkMode) {
       root.classList.add('dark');
       root.classList.remove('light');

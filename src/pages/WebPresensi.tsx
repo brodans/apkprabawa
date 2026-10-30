@@ -1,5 +1,4 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { invoke } from '@tauri-apps/api/core';
 import { createPortal } from 'react-dom';
 import ImageLightbox from '../components/ui/ImageLightbox';
 import L from 'leaflet';
@@ -37,7 +36,6 @@ import {
   login,
   logout,
   muatCaptcha,
-  selesaikanCaptcha,
   urlBerkas,
   type BarisIjin,
   type BarisKehadiran,
@@ -53,12 +51,6 @@ import { kredensialWebSendiri } from '../lib/akunFirestore';
 //  Konstanta
 // ═══════════════════════════════════════════════════════════════════════
 
-/**
- * Berapa kali mencoba captcha baru sebelum menyerah dan meminta input manual.
- *
- * Hanya dipakai kalau `OCR_LOKAL` — di produksi tidak ada percobaan ulang.
- */
-const MAX_PERCOBAAN_OCR = 3;
 const KUNCI_SESI_WEB = 'prabawa:web-presensi-session';
 
 interface SesiWebTersimpan {
@@ -139,44 +131,6 @@ function adaSesiWebTersimpan(username: string): boolean {
     return false;
   }
 }
-
-/**
- * Apakah captcha boleh diisi otomatis.
- *
- * `import.meta.env.DEV` bernilai `true` **hanya** di `npm run dev`, dan `false`
- * di build produksi. Itu persis batas yang diinginkan: OCR tetap jalan saat
- * developers locally, dan tidak pernah menyentuh jaringan di Vercel.
- *
- * ## Kenapa produksi tidak memakai OCR
- *
- * Modelnya adalah `onnxruntime-node` — 844 MB di `node_modules`, dan itu yang
- * membuat storage Function Vercel melonjak. Setelah dipangkas masih 38 MB per
- * deployment, tapi-stubbornly itu adalah **biaya** untuk fitur yang bisa
- * dihindari: captcha 4 digit yang bisa diketik orang dalam dua detik.
- *
- * Menghapus `api/ocr.ts` dari Vercel membuat storage function turun ke handful
- * MB, dan satu dependensi native (beserta advisory-nya) hilang dari produksi.
- *
- * Vite dead-code-eliminates blok OCR di build produksi, jadi `fetch` ke
- * `/api/ocr` benar-benar tidak ada di bundle — bukan sekadar tidak terpakai.
- */
-// Release APK memakai model ONNX yang dibundel di native Android.
-// OCR web tetap hanya aktif saat development; production Vercel tidak memuat model.
-const OCR_LOKAL = import.meta.env.DEV;
-const IS_TAURI = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
-const OCR_OTOMATIS = OCR_LOKAL || IS_TAURI;
-
-async function jalankanOcrTauri(blob: Blob): Promise<{ teks: string; yakin: boolean }> {
-  const base64 = await new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result).split(',')[1] || '');
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(blob);
-  });
-  const result = await invoke<{ text: string; yakin: boolean }>('recognize_captcha', { imageBase64: base64 });
-  return { teks: result.text.replace(/\D/g, '').slice(0, 4), yakin: result.yakin };
-}
-
 
 const DAFTAR_TAB = [
   { id: 'imei',      label: 'IMEI',           icon: Cpu },
@@ -603,7 +557,6 @@ export default function WebPresensi() {
   const [captcha, setCaptcha]       = useState('');
   const [captchaImg, setCaptchaImg] = useState<string | null>(null);
   const [captchaInfo, setCaptchaInfo] = useState('');
-  const [ocrTersedia, setOcrTersedia] = useState<boolean | null>(null);
 
   // Loading & status
   const [loadingCaptcha, setLoadingCaptcha] = useState(false);
@@ -677,83 +630,22 @@ export default function WebPresensi() {
     simpanCaptcha('');
     setCaptchaInfo(alasan || 'Memuat captcha...');
 
-    let blob: Blob | null = null;
 
     try {
       const hasil = await muatCaptcha();
       setCaptchaImg(hasil.url);
       setCaptchaInfo(
         (alasan ? alasan + ' ' : '') +
-          (OCR_OTOMATIS ? 'Membaca captcha otomatis...' : 'Ketik kode captcha dari gambar di atas.')
+          'Ketik kode captcha dari gambar di atas.'
       );
-      blob = hasil.blob;
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       setCaptchaImg(null);
-      setOcrTersedia(false);
       setCaptchaInfo(`⚠ Gagal memuat captcha — ${msg}. Klik ikon refresh untuk coba lagi.`);
       setLoadingCaptcha(false);
       return '';
     }
 
-    /*
-     * Percobaan OCR hanya ada di build dev.
-     *
-     * `OCR_LOKAL` adalah `import.meta.env.DEV`, yang Vite ganti jadi `false`
-     * saat build produksi. Karena itu cabang `if (OCR_LOKAL)` berikut di-constant-
-     * fold dan seluruh isinya — termasuk pemanggilan `selesaikanCaptcha` —
-     * dibuang oleh minifier. `/api/ocr` tidak ada di bundle Vercel sama sekali,
-     * bukan sekadar tak terpakai.
-     *
-     * Bentuknya `if` lalu `return`, bukan syarat di `for`, karena minifier
-     * membuang blok `if (false)` secara utuh. Syarat di `for` hanya membuat
-     * body jadi tidak terjangkau. Minifier biasanya membuangnya juga, tapi itu
-     * bergantung keadaannya dan tidak layak untuk diandalkan.
-     */
-    if (IS_TAURI) {
-      try {
-        const hasilOcr = await jalankanOcrTauri(blob);
-        if (hasilOcr.teks) {
-          simpanCaptcha(hasilOcr.teks);
-          setOcrTersedia(true);
-          setCaptchaInfo(`Terbaca: ${hasilOcr.teks}${hasilOcr.yakin ? ' ✓' : ''}`);
-          setLoadingCaptcha(false);
-          return hasilOcr.teks;
-        }
-      } catch { /* fallback ke OCR dev atau input manual */ }
-    }
-
-    if (OCR_LOKAL) {
-      try {
-        for (let i = 1; i <= MAX_PERCOBAAN_OCR; i++) {
-          const hasilOcr = await selesaikanCaptcha(blob);
-          if (hasilOcr.teks) {
-            simpanCaptcha(hasilOcr.teks);
-            setOcrTersedia(true);
-            setCaptchaInfo(
-              (alasan ? alasan + ' ' : '') +
-                `Terbaca: ${hasilOcr.teks}` +
-                (hasilOcr.yakin ? ' ✓' : ' (kurang yakin — ketik ulang jika perlu)')
-            );
-            setLoadingCaptcha(false);
-            return hasilOcr.teks;
-          }
-          if (i < MAX_PERCOBAAN_OCR) {
-            setCaptchaInfo(`Mencoba captcha baru (${i}/${MAX_PERCOBAAN_OCR})...`);
-            try {
-              const { url: url2, blob: blob2 } = await muatCaptcha();
-              setCaptchaImg(url2);
-              blob = blob2;
-            } catch { break; }
-          }
-        }
-      } catch {
-        // Gagal memanggil /api/ocr (mis. ocr_service.py belum jalan di lokal).
-        // Falls through ke input manual di bawah.
-      }
-    }
-
-    setOcrTersedia(false);
     setCaptchaInfo('Ketik kode captcha dari gambar di atas.');
     setLoadingCaptcha(false);
     return '';
@@ -957,7 +849,7 @@ export default function WebPresensi() {
     setError(''); setHasilImei(null); setLoadingProses(true);
     try {
       const kode = captchaRef.current.trim();
-      if (!kode) { setError('Captcha belum terisi. Tunggu OCR selesai atau ketik manual.'); return; }
+      if (!kode) { setError('Captcha belum diisi. Ketik kode dari gambar captcha.'); return; }
       await login({ nip: nip.trim(), password, captcha: kode });
       setPassword('');
       passwordDiubahManual.current = false;
@@ -1166,7 +1058,7 @@ export default function WebPresensi() {
               </label>
               <input
                 id="web-captcha" value={captcha} onChange={(e) => simpanCaptcha(e.target.value.replace(/\s/g, ''))}
-                placeholder={ocrTersedia && OCR_OTOMATIS ? 'Terisi otomatis' : 'Ketik kode captcha'}
+                placeholder="Ketik kode captcha"
                 autoComplete="off" inputMode="numeric" maxLength={4}
                 className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 transition"
               />

@@ -148,13 +148,9 @@ function pastikanBukanLogin(html: string): void {
 
 export interface CaptchaResult {
   url: string;
-  blob: Blob;
 }
 
-/**
- * Minta session baru lalu ambil gambar captcha.
- * Mengembalikan { url, blob }: url object-URL untuk <img>, blob untuk OCR.
- */
+/** Minta session baru lalu ambil gambar captcha untuk input manual. */
 export async function muatCaptcha(): Promise<CaptchaResult> {
   let base = PROXY;
   try {
@@ -163,7 +159,7 @@ export async function muatCaptcha(): Promise<CaptchaResult> {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const blob = await res.blob();
     if (!blob.type.includes('image')) throw new Error('respons bukan gambar');
-    return { url: URL.createObjectURL(blob), blob };
+    return { url: URL.createObjectURL(blob) };
   } catch (error) {
     if (base === PROXY_FALLBACK) throw error;
     base = PROXY_FALLBACK;
@@ -172,44 +168,7 @@ export async function muatCaptcha(): Promise<CaptchaResult> {
   const res = await req(`${base}/p/captcha?r=${Math.random()}&reload=1`);
   if (!res.ok) throw new Error(`Gagal memuat captcha (HTTP ${res.status})`);
   const blob = await res.blob();
-  return { url: URL.createObjectURL(blob), blob };
-}
-
-export interface OcrResult {
-  teks: string;
-  kandidat: string[];
-  yakin: boolean;
-}
-
-/**
- * Pecahkan captcha lewat endpoint /api/ocr`.
- *
- *  **Hanya dipanggil di `npm run dev`.** Di build produksi, Vite membuang
- * seluruh blok yang memanggil ini karena `OCR_LOKAL` bernilai `false`
- * (lihat `WebPresensi.tsx`)  captcha diketik manual, dan tidak ada `api/ocr.ts`
- * yang ter-deploy. Fungsi ini tidak boleh dipanggil dari mana pun yang ikut
- * ke build produksi.
- *
- * Yang melayaninya di dev adalah `ocr_service.py` (ddddocr, port 8791) melalui
- * middleware Vite  endpoint dan format responsnya sama seperti yang pernah
- * dilayani `api/ocr.ts` di Vercel.
- */
-export async function selesaikanCaptcha(blob: Blob): Promise<OcrResult> {
-  let res: Response;
-  try {
-    res = await fetch(apiUrl('/api/ocr'), {
-      method: 'POST',
-      body: blob,
-      headers: { 'Content-Type': 'application/octet-stream' },
-    });
-  } catch {
-    return { teks: '', kandidat: [], yakin: false };
-  }
-  const data = await res.json().catch(() => ({})) as { ok?: boolean; text?: string; kandidat?: string[]; yakin?: boolean; error?: string };
-  if (!res.ok || !data.ok) {
-    return { teks: '', kandidat: [], yakin: false };
-  }
-  return { teks: data.text || '', kandidat: data.kandidat || [], yakin: !!data.yakin };
+  return { url: URL.createObjectURL(blob) };
 }
 
 /**

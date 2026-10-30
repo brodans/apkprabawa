@@ -89,6 +89,14 @@ function rewriteSetCookie(cookies) {
   });
 }
 async function handler(req, res) {
+  const origin = typeof req.headers.origin === "string" ? req.headers.origin : "";
+  if (origin) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Access-Control-Allow-Credentials", "true");
+    res.setHeader("Vary", "Origin");
+  }
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS,HEAD");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, Accept");
   const originalUrl = req.url || "/";
   const matchedPath = req.headers?.["x-matched-path"] || "";
   const rewriteSrc = req.headers?.["x-vercel-rewrite-source"] || "";
