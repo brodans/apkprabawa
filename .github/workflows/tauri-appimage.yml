@@ -1,0 +1,34 @@
+name: Tauri AppImage
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install Linux dependencies
+        run: sudo apt-get update && sudo apt-get install -y build-essential g++ libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+      - name: Configure AppImage bundler
+        run: echo 'APPIMAGE_EXTRACT_AND_RUN=1' >> "$GITHUB_ENV"
+      - run: npm ci
+      - name: Build Linux AppImage
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: app-v__VERSION__
+          releaseName: PRABAWA v__VERSION__
+          releaseBody: Built automatically by GitHub Actions.
+          releaseDraft: true
+          prerelease: false
+          args: '--bundles appimage'
