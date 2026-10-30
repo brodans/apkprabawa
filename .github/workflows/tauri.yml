@@ -7,16 +7,8 @@ permissions:
   contents: write
 
 jobs:
-  build:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - platform: ubuntu-24.04
-            args: '--bundles appimage'
-          - platform: ubuntu-24.04
-            args: '--apk --target aarch64-linux-android'
-    runs-on: ${{ matrix.platform }}
+  appimage:
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -24,34 +16,12 @@ jobs:
           node-version: 22
           cache: npm
       - uses: dtolnay/rust-toolchain@stable
-        if: startsWith(matrix.args, '--apk')
-        with:
-          targets: aarch64-linux-android
-      - uses: dtolnay/rust-toolchain@stable
-        if: startsWith(matrix.args, '--bundles appimage')
       - name: Install Linux dependencies
         run: sudo apt-get update && sudo apt-get install -y build-essential g++ libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
       - name: Configure AppImage bundler
-        if: startsWith(matrix.args, '--bundles appimage')
         run: echo 'APPIMAGE_EXTRACT_AND_RUN=1' >> "$GITHUB_ENV"
-      - name: Setup Java
-        if: startsWith(matrix.args, '--apk')
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
-      - name: Setup Android SDK
-        if: startsWith(matrix.args, '--apk')
-        uses: android-actions/setup-android@v3
-        with:
-          packages: ''
-          accept-android-sdk-licenses: false
-      - name: Install Android platform
-        if: startsWith(matrix.args, '--apk')
-        run: sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0" "ndk;27.0.12077973"
       - run: npm ci
       - name: Build Linux AppImage
-        if: startsWith(matrix.args, '--bundles appimage')
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -62,14 +32,34 @@ jobs:
           releaseDraft: true
           prerelease: false
           args: '--bundles appimage'
-      - name: Initialize Android project
-        if: startsWith(matrix.args, '--apk')
-        run: npm run tauri:android:init
+
+  android:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: ''
+          accept-android-sdk-licenses: false
+      - name: Install Android platform
+        run: sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0" "ndk;27.0.12077973"
+      - run: npm ci
       - name: Build Android APK
-        if: startsWith(matrix.args, '--apk')
         run: npm run tauri:android:build
       - name: Upload Android APK
-        if: startsWith(matrix.args, '--apk')
         uses: actions/upload-artifact@v4
         with:
           name: prabawa-android-apk
