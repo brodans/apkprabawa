@@ -294,10 +294,51 @@ function PageLoading({ pageId }: { pageId: string }) {
   let content: React.ReactNode;
   if (pageId === 'tabBeranda' && !pegawai && serverAutoLoginPending) {
     content = (
-      <div className="rounded-2xl border border-slate-200/70 bg-white p-5 dark:border-slate-700/60 dark:bg-slate-800/60 sm:p-6">
-        <div className="flex items-center gap-3 py-3" role="status">
-          <Skeleton className="h-5 w-5 shrink-0 rounded-full" />
-          <Skeleton className="h-4 w-52 max-w-full" />
+      <div className="space-y-6">
+        <div className="flex items-center gap-3 rounded-2xl border border-slate-200/70 bg-white p-4 dark:border-slate-700/60 dark:bg-slate-800/60 sm:p-5" role="status">
+          <Skeleton className="h-10 w-10 shrink-0 rounded-xl" />
+          <div className="min-w-0 flex-1 space-y-2">
+            <Skeleton className="h-4 w-44 max-w-full" />
+            <Skeleton className="h-3 w-64 max-w-full" />
+          </div>
+          <Skeleton className="h-2.5 w-2.5 shrink-0 rounded-full" />
+        </div>
+        {stats(4, [0, 1, 2, 3])}
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <div className="rounded-2xl border border-slate-200/70 bg-white p-5 dark:border-slate-700/60 dark:bg-slate-800/60 sm:p-6">
+            <Skeleton className="mb-4 h-4 w-36" />
+            <div className="mb-5 flex items-center gap-4">
+              <Skeleton className="h-16 w-16 shrink-0 rounded-2xl" />
+              <div className="min-w-0 space-y-2">
+                <Skeleton className="h-4 w-40 max-w-full" />
+                <Skeleton className="h-3 w-32 max-w-full" />
+                <Skeleton className="h-5 w-24 rounded-full" />
+              </div>
+            </div>
+            <div className="space-y-3">
+              {Array.from({ length: 5 }, (_, index) => (
+                <div key={index} className="flex items-center justify-between gap-3">
+                  <Skeleton className="h-3 w-24 max-w-[40%]" />
+                  <Skeleton className="h-3 w-32 max-w-[55%]" />
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="rounded-2xl border border-slate-200/70 bg-white p-5 dark:border-slate-700/60 dark:bg-slate-800/60 sm:p-6">
+            <Skeleton className="mb-4 h-4 w-32" />
+            <div className="space-y-3">
+              {Array.from({ length: 3 }, (_, index) => (
+                <div key={index} className="flex items-center gap-3 rounded-xl border border-slate-200 p-3.5 dark:border-slate-700">
+                  <Skeleton className="h-10 w-10 shrink-0 rounded-xl" />
+                  <div className="min-w-0 flex-1 space-y-2">
+                    <Skeleton className="h-3 w-28 max-w-full" />
+                    <Skeleton className="h-3 w-40 max-w-full" />
+                  </div>
+                  <Skeleton className="h-4 w-4 shrink-0 rounded" />
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -712,7 +753,7 @@ function PageLoading({ pageId }: { pageId: string }) {
 
 function StartupShell({ pageId }: { pageId: string }) {
   return (
-    <div className="fixed inset-0 z-50 flex h-dvh w-full overflow-hidden bg-slate-50 text-slate-800 dark:bg-[#0B1120] dark:text-slate-200" aria-hidden="true">
+    <div className="poni-startup-shell fixed inset-0 z-50 flex h-dvh w-full min-h-0 overflow-hidden bg-slate-50 text-slate-800 dark:bg-[#0B1120] dark:text-slate-200" aria-hidden="true">
       {/*
        * `fixed inset-0`: kerangka ini **menutup** apa pun yang sedang
        * disiapkan di belakangnya (gerbang langganan yang sedang memuat),
@@ -746,7 +787,7 @@ function StartupShell({ pageId }: { pageId: string }) {
           ))}
         </nav>
       </aside>
-      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <header className="poni-header flex shrink-0 items-center justify-between border-b border-slate-200/80 bg-slate-100/80 dark:border-slate-800/80 dark:bg-[#0B1120]/80">
           <div className="flex min-w-0 items-center gap-3">
             <Skeleton className="h-9 w-9 shrink-0 rounded-xl lg:hidden" />
@@ -858,10 +899,10 @@ function MainApp({ onLogout, isDarkMode, toggleDarkMode }: { onLogout: () => voi
     const setWorkspaceActive = (active: boolean) => {
       try {
         const bridge = (window as unknown as Record<string, unknown>).AndroidPrabawa as
-          | { setWorkspaceActive?: (isActive: boolean) => void }
+          | { setWorkspaceActive?: (isActive: boolean, darkMode: boolean) => void }
           | undefined;
         if (typeof bridge?.setWorkspaceActive !== 'function') return false;
-        bridge.setWorkspaceActive(active);
+        bridge.setWorkspaceActive(active, isDarkMode);
         return true;
       } catch {
         return false;
@@ -876,7 +917,7 @@ function MainApp({ onLogout, isDarkMode, toggleDarkMode }: { onLogout: () => voi
       retries.forEach(window.clearTimeout);
       setWorkspaceActive(false);
     };
-  }, []);
+  }, [isDarkMode]);
 
   /*
    * Filter halaman berdasarkan izin akses pengguna.
@@ -1543,6 +1584,17 @@ function MainApp({ onLogout, isDarkMode, toggleDarkMode }: { onLogout: () => voi
 
 export default function App() {
   const { isDarkMode, toggleDarkMode } = useDarkMode();
+
+  useEffect(() => {
+    const splash = document.getElementById('boot-splash');
+    if (!splash) return;
+    const fadeTimer = window.setTimeout(() => splash.classList.add('boot-splash-hidden'), 520);
+    const removeTimer = window.setTimeout(() => splash.remove(), 800);
+    return () => {
+      window.clearTimeout(fadeTimer);
+      window.clearTimeout(removeTimer);
+    };
+  }, []);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {

@@ -153,6 +153,19 @@ cek('boot shell hanya tampil saat ada sesi tersimpan yang sah',
 cek('boot shell memakai box-sizing border-box seperti preflight Tailwind',
   /\*,\s*\*::before,\s*\*::after\s*\{\s*box-sizing:\s*border-box/.test(htmlSrc) &&
     /\.boot-logo\s*\{[^}]*height:\s*2\.5rem[^}]*width:\s*2\.5rem/.test(htmlSrc));
+cek('splash brand statis tampil sebelum React siap dan dilepas setelah mount',
+  /id="boot-splash"[^>]*role="status"/.test(htmlSrc) &&
+    /boot-splash-logo[^]*icon-192\.png/.test(htmlSrc) &&
+    /boot-splash-hidden/.test(appSrc) &&
+    /setTimeout\(\(\) => splash\.classList\.add\('boot-splash-hidden'\), 520\)/.test(appSrc));
+cek('skeleton boot mobile mengunci tinggi flex dan safe area bawah',
+  /\.boot-content \{[^}]*min-height: 0/.test(htmlSrc) &&
+    /body\.is-native \.boot-shell \{ height: calc\(100dvh - var\(--poni-bawah/.test(htmlSrc) &&
+    /poni-startup-shell fixed inset-0[^\"]*min-h-0/.test(appSrc) &&
+    /flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden/.test(appSrc) &&
+    /body\.is-native \.poni-startup-shell\s*\{\s*height:\s*calc\(100dvh - var\(--poni-bawah/.test(cssSrc));
+cek('skeleton Beranda saat auto-login memenuhi layout mobile',
+  /if \(pageId === 'tabBeranda' && !pegawai && serverAutoLoginPending\)[\s\S]{0,800}stats\(4, \[0, 1, 2, 3\]\)[\s\S]{0,800}grid grid-cols-1 gap-6 lg:grid-cols-2/.test(appSrc));
 cek('input captcha lebar penuh, kotak captcha berukuran tetap',
   /id="web-captcha"[\s\S]{0,500}className="w-full/.test(webSrc) &&
     /h-11 w-\[191px\][\s\S]{0,80}overflow-hidden rounded-none border/.test(webSrc) &&

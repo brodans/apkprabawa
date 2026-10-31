@@ -173,16 +173,29 @@
     height: calc(100dvh - var(--poni-bawah, var(--sab))) !important;
     min-height: 0 !important;
   }
+  body.is-native .poni-startup-shell {
+    height: calc(100dvh - var(--poni-bawah, var(--sab))) !important;
+    min-height: 0 !important;
+  }
   body.is-native .poni-workspace .poni-konten {
+    padding-bottom: 1.25rem !important;
+  }
+  body.is-native .poni-startup-shell .poni-konten {
     padding-bottom: 1.25rem !important;
   }
   @media (min-width: 640px) {
     body.is-native .poni-workspace .poni-konten {
       padding-bottom: 1.5rem !important;
     }
+    body.is-native .poni-startup-shell .poni-konten {
+      padding-bottom: 1.5rem !important;
+    }
   }
   @media (min-width: 1024px) {
     body.is-native .poni-workspace .poni-konten {
+      padding-bottom: 1.75rem !important;
+    }
+    body.is-native .poni-startup-shell .poni-konten {
       padding-bottom: 1.75rem !important;
     }
   }

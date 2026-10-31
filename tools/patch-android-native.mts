@@ -1,4 +1,4 @@
-import { cpSync, mkdirSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
@@ -57,6 +57,22 @@ console.log('🎨 Icon Prabawa berhasil diterapkan ke Android!\n');
 
 const root = join(process.cwd(), 'src-tauri', 'gen', 'android', 'app', 'src', 'main');
 const put = (file: string, content: string) => { mkdirSync(dirname(file), { recursive: true }); writeFileSync(file, content); };
+const splashIcon = join(root, 'res/drawable-nodpi/splash_icon.png');
+mkdirSync(dirname(splashIcon), { recursive: true });
+cpSync(join(iconOut, '128x128@2x.png'), splashIcon);
+put(join(root, 'res/drawable/splash_screen.xml'), `<layer-list xmlns:android="http://schemas.android.com/apk/res/android"><item android:drawable="@color/splash_background"/><item><bitmap android:gravity="center" android:src="@drawable/splash_icon" /></item></layer-list>
+`);
+
+const manifestPath = join(root, 'AndroidManifest.xml');
+if (existsSync(manifestPath)) {
+  const manifest = readFileSync(manifestPath, 'utf8');
+  let patchedManifest = manifest.replace(/android:theme="@style\/[^\"]+"/g, 'android:theme="@style/Theme.app"');
+  if (!/android:theme=/.test(patchedManifest)) {
+    patchedManifest = patchedManifest.replace(/<application\b/, '<application android:theme="@style/Theme.app"');
+  }
+  if (patchedManifest !== manifest) writeFileSync(manifestPath, patchedManifest);
+}
+
 const activity = join(root, 'java/id/go/jatim/prabawa/MainActivity.kt');
 put(activity, `package id.go.jatim.prabawa
 
@@ -82,7 +98,6 @@ import id.go.jatim.prabawa.TauriActivity
 class MainActivity : TauriActivity() {
 
   private var isWorkspaceActive = false
-  private var darkModeActive = false
 
   /** Dipanggil dari JS saat Prabawa mengganti tema (dark/light). */
   inner class PrabawaBridge {
@@ -92,8 +107,8 @@ class MainActivity : TauriActivity() {
     }
 
     @JavascriptInterface
-    fun setWorkspaceActive(active: Boolean) {
-      mainHandler.post { applySystemBarTheme(darkModeActive, active) }
+    fun setWorkspaceActive(active: Boolean, dark: Boolean) {
+      mainHandler.post { applySystemBarTheme(dark, active) }
     }
   }
 
@@ -302,7 +317,6 @@ class MainActivity : TauriActivity() {
    */
   private fun applySystemBarTheme(isDark: Boolean, workspaceActive: Boolean = isWorkspaceActive) {
     runOnUiThread {
-      darkModeActive = isDark
       isWorkspaceActive = workspaceActive
       val barColor = if (isDark) Color.parseColor("#0F172A") else Color.parseColor("#FFFFFF")
       val navigationBarColor = if (workspaceActive) {
@@ -337,13 +351,13 @@ class MainActivity : TauriActivity() {
 }
 `);
 
-put(join(root, 'res/values/colors.xml'), `<resources><color name="splash_background">#0F172A</color><color name="splash_icon_background">#0F172A</color></resources>
+put(join(root, 'res/values/colors.xml'), `<resources><color name="splash_background">#0B1120</color><color name="splash_icon_background">#0B1120</color></resources>
 `);
 
-put(join(root, 'res/values/themes.xml'), `<resources xmlns:tools="http://schemas.android.com/tools"><style name="Theme.prabawa" parent="Theme.Material3.DayNight.NoActionBar"><item name="android:windowLightStatusBar">true</item><item name="android:statusBarColor">@android:color/transparent</item><item name="android:windowLightNavigationBar">true</item><item name="android:navigationBarColor">@android:color/transparent</item><item name="android:enforceStatusBarContrast" tools:targetApi="29">false</item><item name="android:enforceNavigationBarContrast" tools:targetApi="29">false</item><item name="android:background">@null</item><item name="android:windowBackground">@color/splash_background</item><item name="android:colorBackground">@color/splash_background</item><item name="android:windowActionModeOverlay">true</item><item name="android:windowNoTitle">true</item><item name="android:windowSplashScreenBackground">@color/splash_background</item><item name="android:windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item></style></resources>
+put(join(root, 'res/values/themes.xml'), `<resources xmlns:tools="http://schemas.android.com/tools"><style name="Theme.app" parent="Theme.Material3.DayNight.NoActionBar"><item name="android:windowLightStatusBar">false</item><item name="android:statusBarColor">@android:color/transparent</item><item name="android:windowLightNavigationBar">false</item><item name="android:navigationBarColor">@android:color/transparent</item><item name="android:enforceStatusBarContrast" tools:targetApi="29">false</item><item name="android:enforceNavigationBarContrast" tools:targetApi="29">false</item><item name="android:background">@color/splash_background</item><item name="android:windowBackground">@drawable/splash_screen</item><item name="android:colorBackground">@color/splash_background</item><item name="android:windowActionModeOverlay">true</item><item name="android:windowNoTitle">true</item><item name="android:windowSplashScreenBackground">@color/splash_background</item><item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_icon</item><item name="android:windowSplashScreenIconBackgroundColor">@color/splash_icon_background</item></style><style name="Theme.prabawa" parent="Theme.app" /></resources>
 `);
 
-put(join(root, 'res/values-night/themes.xml'), `<resources xmlns:tools="http://schemas.android.com/tools"><style name="Theme.prabawa" parent="Theme.Material3.DayNight.NoActionBar"><item name="android:windowLightStatusBar">false</item><item name="android:statusBarColor">@android:color/transparent</item><item name="android:windowLightNavigationBar">false</item><item name="android:navigationBarColor">@android:color/transparent</item><item name="android:enforceStatusBarContrast" tools:targetApi="29">false</item><item name="android:enforceNavigationBarContrast" tools:targetApi="29">false</item><item name="android:background">@null</item><item name="android:windowBackground">@color/splash_background</item><item name="android:colorBackground">@color/splash_background</item><item name="android:windowSplashScreenBackground">@color/splash_background</item><item name="android:windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item></style></resources>
+put(join(root, 'res/values-night/themes.xml'), `<resources xmlns:tools="http://schemas.android.com/tools"><style name="Theme.app" parent="Theme.Material3.DayNight.NoActionBar"><item name="android:windowLightStatusBar">false</item><item name="android:statusBarColor">@android:color/transparent</item><item name="android:windowLightNavigationBar">false</item><item name="android:navigationBarColor">@android:color/transparent</item><item name="android:enforceStatusBarContrast" tools:targetApi="29">false</item><item name="android:enforceNavigationBarContrast" tools:targetApi="29">false</item><item name="android:background">@color/splash_background</item><item name="android:windowBackground">@drawable/splash_screen</item><item name="android:colorBackground">@color/splash_background</item><item name="android:windowSplashScreenBackground">@color/splash_background</item><item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_icon</item><item name="android:windowSplashScreenIconBackgroundColor">@color/splash_icon_background</item></style><style name="Theme.prabawa" parent="Theme.app" /></resources>
 `);
 
 const gradle = join(process.cwd(), 'src-tauri/gen/android/app/build.gradle.kts');

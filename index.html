@@ -101,6 +101,22 @@
         background-image: linear-gradient(to right, #ffffff0a 1px, transparent 1px), linear-gradient(to bottom, #ffffff0a 1px, transparent 1px);
       }
       html.app-shell-active .boot-login { display: none; }
+      .boot-splash { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: max(1.5rem, var(--sat)) max(1.5rem, var(--poni-kanan)) max(1.5rem, var(--poni-bawah)) max(1.5rem, var(--poni-kiri)); background: #f8fafc; color: #0f172a; transition: opacity .24s ease, visibility 0s linear .24s; }
+      .dark .boot-splash { background: #0B1120; color: #e2e8f0; }
+      .boot-splash-hidden { opacity: 0; visibility: hidden; pointer-events: none; }
+      .boot-splash-body { display: flex; flex-direction: column; align-items: center; text-align: center; }
+      .boot-splash-logo { display: flex; height: 5rem; width: 5rem; align-items: center; justify-content: center; overflow: hidden; border: 1px solid oklch(0.929 0.013 255.508); border-radius: 1.25rem; background: #fff; padding: .5rem; }
+      .dark .boot-splash-logo { border-color: oklch(0.372 0.044 257.287 / .7); background: #0f172a; }
+      .boot-splash-logo img { width: 100%; height: 100%; object-fit: contain; }
+      .boot-splash-name { margin-top: 1.25rem; font: 800 1.125rem/1.4 'Plus Jakarta Sans', ui-sans-serif, sans-serif; }
+      .boot-splash-subtitle { margin-top: .25rem; color: #64748b; font: 500 .8125rem/1.5 'Plus Jakarta Sans', ui-sans-serif, sans-serif; }
+      .dark .boot-splash-subtitle { color: #94a3b8; }
+      .boot-splash-track { width: 7rem; height: 3px; margin-top: 1.75rem; overflow: hidden; border-radius: 9999px; background: #dbeafe; }
+      .dark .boot-splash-track { background: #1e293b; }
+      .boot-splash-track::after { content: ''; display: block; width: 40%; height: 100%; border-radius: inherit; background: #2563eb; animation: boot-progress 1s ease-in-out infinite alternate; }
+      .dark .boot-splash-track::after { background: #60a5fa; }
+      @keyframes boot-progress { from { transform: translateX(0); } to { transform: translateX(150%); } }
+      @media (prefers-reduced-motion: reduce) { .boot-splash-track::after { animation-duration: 2s; } }
 
       /* ── Skeleton: same as <Skeleton> (animate-pulse rounded-lg) ── */
       .bsk, .bsk-s, .bsk-n { animation: boot-pulse 2s cubic-bezier(.4,0,.6,1) infinite; border-radius: .5rem; }
@@ -138,7 +154,7 @@
       .boot-dot { height: 1.25rem; width: 1.25rem; flex: none; border-radius: .25rem; }
 
       /* ── Kolom konten + header ── */
-      .boot-content { display: flex; min-width: 0; flex: 1 1 0%; flex-direction: column; overflow: hidden; }
+      .boot-content { display: flex; min-width: 0; min-height: 0; flex: 1 1 0%; flex-direction: column; overflow: hidden; }
       .boot-header { display: flex; min-height: calc(3.5rem + var(--poni-atas)); height: calc(3.5rem + var(--poni-atas)); padding-top: var(--poni-atas); flex: none; align-items: center; justify-content: space-between; border-bottom: 1px solid #e2e8f0cc; border-bottom: 1px solid oklch(0.929 0.013 255.508 / 0.8); background: #f1f5f9cc; background: oklch(0.968 0.007 247.896 / 0.8); padding-left: max(1rem, var(--poni-kiri)); padding-right: max(1rem, var(--poni-kanan)); box-sizing: border-box; }
       .dark .boot-header { border-bottom-color: #1d293dcc; border-bottom-color: oklch(0.279 0.041 260.031 / 0.8); background: #0b1120cc; background: rgb(11 17 32 / 0.8); }
       @media (min-width: 640px) { .boot-header { padding-left: max(1.5rem, var(--poni-kiri)); padding-right: max(1.5rem, var(--poni-kanan)); } }
@@ -153,6 +169,10 @@
       .boot-main { flex: 1 1 0%; min-height: 0; overflow-y: auto; padding-top: 1.25rem; padding-left: max(1rem, var(--poni-kiri)); padding-right: max(1rem, var(--poni-kanan)); padding-bottom: calc(var(--poni-bawah) + 1.25rem); box-sizing: border-box; }
       @media (min-width: 640px) { .boot-main { padding-top: 1.5rem; padding-left: max(1.5rem, var(--poni-kiri)); padding-right: max(1.5rem, var(--poni-kanan)); padding-bottom: max(1.5rem, var(--poni-bawah)); } }
       @media (min-width: 1024px) { .boot-main { padding-top: 1.75rem; padding-left: max(2rem, var(--poni-kiri)); padding-right: max(2rem, var(--poni-kanan)); padding-bottom: max(2rem, var(--poni-bawah)); } }
+      body.is-native .boot-shell { height: calc(100dvh - var(--poni-bawah, var(--sab))); min-height: 0; }
+      body.is-native .boot-main { padding-bottom: 1.25rem; }
+      @media (min-width: 640px) { body.is-native .boot-main { padding-bottom: 1.5rem; } }
+      @media (min-width: 1024px) { body.is-native .boot-main { padding-bottom: 1.75rem; } }
 
       /* ── Halaman (PageLoading root: w-full space-y-6 / space-y-5) ── */
       .boot-hal { width: 100%; display: flex; flex-direction: column; gap: 1.5rem; }
@@ -306,6 +326,14 @@
         } catch (e) {}
       })();
     </script>
+    <div id="boot-splash" class="boot-splash" role="status" aria-label="Memuat PRABAWA">
+      <div class="boot-splash-body">
+        <div class="boot-splash-logo"><img src="/assets/icon-192.png" alt="" /></div>
+        <div class="boot-splash-name">PRABAWA</div>
+        <div class="boot-splash-subtitle">Portal Presensi Jawa Timur</div>
+        <div class="boot-splash-track" aria-hidden="true"></div>
+      </div>
+    </div>
     <div id="root">
       <div class="boot-shell" aria-hidden="true">
         <aside class="boot-sidebar">
