@@ -88,13 +88,12 @@ class MainActivity : TauriActivity() {
   inner class PrabawaBridge {
     @JavascriptInterface
     fun setTheme(dark: Boolean) {
-      applySystemBarTheme(dark)
+      mainHandler.post { applySystemBarTheme(dark, isWorkspaceActive) }
     }
 
     @JavascriptInterface
     fun setWorkspaceActive(active: Boolean) {
-      isWorkspaceActive = active
-      applySystemBarTheme(darkModeActive, active)
+      mainHandler.post { applySystemBarTheme(darkModeActive, active) }
     }
   }
 

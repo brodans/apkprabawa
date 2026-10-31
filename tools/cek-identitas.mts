@@ -274,6 +274,10 @@ cek('AppImage tidak membundel media framework sistem',
 const cargoRelease = readFileSync(join(root, 'src-tauri/Cargo.toml'), 'utf8');
 cek('profile release mengoptimalkan ukuran dan menghapus symbols',
   /\[profile\.release\][\s\S]*?opt-level\s*=\s*"z"[\s\S]*?lto\s*=\s*true[\s\S]*?codegen-units\s*=\s*1[\s\S]*?strip\s*=\s*"symbols"/.test(cargoRelease));
+const nativePatch = readFileSync(join(root, 'tools/patch-android-native.mts'), 'utf8');
+cek('tema navbar Android diserialkan di UI thread',
+  /fun setTheme\(dark: Boolean\)\s*\{\s*mainHandler\.post \{ applySystemBarTheme\(dark, isWorkspaceActive\) \}/.test(nativePatch) &&
+    /fun setWorkspaceActive\(active: Boolean\)\s*\{\s*mainHandler\.post \{ applySystemBarTheme\(darkModeActive, active\) \}/.test(nativePatch));
 
 // ═════════════════════════════════════════════════════════════════════
 console.log('\n=== Deskripsi: index.html dan manifest.json harus sama');
