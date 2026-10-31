@@ -1,5 +1,59 @@
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import { execFileSync } from 'node:child_process';
+import { tmpdir } from 'node:os';
+import { randomBytes } from 'node:crypto';
+
+// ── Regenerate Android mipmap icons dari icon Prabawa ──────────────────────
+// `tauri android init` selalu membuat icon Tauri default. Kita generate ulang
+// dari src-tauri/icons/icon.png (icon resmi Prabawa) dan salin ke gen/android.
+// Gunakan tmpdir agar tidak ada masalah write permission pada src-tauri/icons/.
+
+const iconSrc = join(process.cwd(), 'src-tauri', 'icons', 'icon.png');
+const iconOut = join(tmpdir(), 'tauri-icons-' + randomBytes(4).toString('hex'));
+const resDir = join(process.cwd(), 'src-tauri', 'gen', 'android', 'app', 'src', 'main', 'res');
+
+console.log('🎨 Generating Android icons dari icon Prabawa...');
+mkdirSync(iconOut, { recursive: true });
+execFileSync('npx', ['@tauri-apps/cli', 'icon', iconSrc, '-o', iconOut], {
+  stdio: 'inherit',
+  cwd: process.cwd(),
+});
+
+// Salin mipmap-* ke gen/android res
+const mipmaps = ['mipmap-hdpi', 'mipmap-mdpi', 'mipmap-xhdpi', 'mipmap-xxhdpi', 'mipmap-xxxhdpi'];
+for (const mipmap of mipmaps) {
+  const src = join(iconOut, 'android', mipmap);
+  const dst = join(resDir, mipmap);
+  try {
+    cpSync(src, dst, { recursive: true });
+    console.log(`  ✅ ${mipmap} disalin`);
+  } catch {
+    console.warn(`  ⚠️  ${mipmap} tidak ditemukan, skip`);
+  }
+}
+
+// Salin mipmap-anydpi-v26 (adaptive icon XML)
+const anydpiSrc = join(iconOut, 'android', 'mipmap-anydpi-v26');
+const anydpiDst = join(resDir, 'mipmap-anydpi-v26');
+try {
+  cpSync(anydpiSrc, anydpiDst, { recursive: true });
+  console.log('  ✅ mipmap-anydpi-v26 disalin');
+} catch {
+  console.warn('  ⚠️  mipmap-anydpi-v26 tidak ditemukan, skip');
+}
+
+// Salin background warna untuk adaptive icon
+const bgXmlSrc = join(iconOut, 'android', 'values', 'ic_launcher_background.xml');
+const bgXmlDst = join(resDir, 'values', 'ic_launcher_background.xml');
+try {
+  mkdirSync(dirname(bgXmlDst), { recursive: true });
+  cpSync(bgXmlSrc, bgXmlDst);
+  console.log('  ✅ ic_launcher_background.xml disalin');
+} catch {
+  console.warn('  ⚠️  ic_launcher_background.xml tidak ditemukan, skip');
+}
+console.log('🎨 Icon Prabawa berhasil diterapkan ke Android!\n');
 
 const root = join(process.cwd(), 'src-tauri', 'gen', 'android', 'app', 'src', 'main');
 const put = (file: string, content: string) => { mkdirSync(dirname(file), { recursive: true }); writeFileSync(file, content); };
