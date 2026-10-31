@@ -35,6 +35,11 @@
     /* Hilangkan highlight biru saat tap di mobile */
     -webkit-tap-highlight-color: transparent;
     overflow-x: hidden;
+    /* Safe area agar konten web tidak tertutup status bar / navigation bar di Android edge-to-edge */
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    padding-left: env(safe-area-inset-left, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
   }
 
   html.dark body {
