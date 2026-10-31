@@ -125,6 +125,27 @@ export default function LoginScreen({ onLogin, onLoginStart, isDarkMode, toggleD
   const [showPin, setShowPin] = useState(false);
   const [timeLeft, setTimeLeft] = useState(0);
   const authInFlight = useRef(false);
+  const loginViewportRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const viewport = window.visualViewport;
+    const updateLoginViewport = () => {
+      const container = loginViewportRef.current;
+      if (!container) return;
+      container.style.top = `${viewport?.offsetTop ?? 0}px`;
+      container.style.height = `${viewport?.height ?? window.innerHeight}px`;
+    };
+
+    updateLoginViewport();
+    viewport?.addEventListener('resize', updateLoginViewport);
+    viewport?.addEventListener('scroll', updateLoginViewport);
+    window.addEventListener('resize', updateLoginViewport);
+    return () => {
+      viewport?.removeEventListener('resize', updateLoginViewport);
+      viewport?.removeEventListener('scroll', updateLoginViewport);
+      window.removeEventListener('resize', updateLoginViewport);
+    };
+  }, []);
 
   // ── Pulihkan status kunci dari localStorage ────────────────────
   /*
@@ -325,7 +346,8 @@ export default function LoginScreen({ onLogin, onLoginStart, isDarkMode, toggleD
 
   return (
     <div
-      className="relative h-[100dvh] flex items-center [justify-content:safe_center] p-4 sm:p-8 font-sans transition-colors duration-500 bg-slate-200/80 dark:bg-[#0a0f1c] overflow-x-hidden overflow-y-auto selection:bg-indigo-500/30"
+      ref={loginViewportRef}
+      className="fixed inset-x-0 top-0 z-40 h-[100dvh] flex items-center [justify-content:safe_center] p-4 sm:p-8 font-sans transition-colors duration-500 bg-slate-200/80 dark:bg-[#0a0f1c] overflow-x-hidden overflow-y-auto selection:bg-indigo-500/30"
       style={{
         paddingTop: 'max(1rem, var(--poni-atas, 0px))',
         paddingBottom: 'max(1rem, var(--poni-bawah, 0px))',

@@ -178,7 +178,7 @@
 
   /* The shared page scrollport must reserve the Android navigation-bar inset. */
   body.is-native .konten-gulir {
-    padding-bottom: var(--poni-bawah, var(--sab)) !important;
+    padding-bottom: max(1.75rem, var(--poni-bawah, var(--sab, 0px))) !important;
     box-sizing: border-box;
   }
   body.is-native .konten-gulir > .poni-konten {
