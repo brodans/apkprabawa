@@ -2,7 +2,7 @@ import { mkdirSync, writeFileSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
 const root = join(process.cwd(), 'src-tauri', 'gen', 'android', 'app', 'src', 'main');
-const put = (file, content) => { mkdirSync(dirname(file), { recursive: true }); writeFileSync(file, content); };
+const put = (file: string, content: string) => { mkdirSync(dirname(file), { recursive: true }); writeFileSync(file, content); };
 const activity = join(root, 'java/id/go/jatim/prabawa/MainActivity.kt');
 put(activity, `package id.go.jatim.prabawa
 
@@ -32,5 +32,27 @@ put(join(root, 'res/values/themes.xml'), `<resources xmlns:tools="http://schemas
 put(join(root, 'res/values-night/themes.xml'), `<resources xmlns:tools="http://schemas.android.com/tools"><style name="Theme.prabawa" parent="Theme.Material3.DayNight.NoActionBar"><item name="android:windowLightStatusBar">false</item><item name="android:statusBarColor">@android:color/transparent</item><item name="android:navigationBarColor">@android:color/transparent</item><item name="android:windowLightNavigationBar">false</item><item name="android:windowSplashScreenBackground">@color/splash_background</item><item name="android:windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item></style></resources>\n`);
 const gradle = join(process.cwd(), 'src-tauri/gen/android/app/build.gradle.kts');
 let g = readFileSync(gradle, 'utf8');
+g = g.replace(
+  '    buildTypes {\n        getByName("debug") {',
+  `    signingConfigs {
+        create("release") {
+            storeFile = File(System.getenv("ANDROID_KEYSTORE_PATH") ?: "/tmp/prabawa-release.jks")
+            storePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD") ?: ""
+            keyAlias = System.getenv("ANDROID_KEY_ALIAS") ?: ""
+            keyPassword = System.getenv("ANDROID_KEY_PASSWORD") ?: ""
+        }
+    }
+    buildTypes {
+        getByName("debug") {`
+);
+g = g.replace(
+  '        getByName("release") {\n            optimization {',
+  `        getByName("release") {
+            isMinifyEnabled = true
+            signingConfig = signingConfigs.getByName("release")
+            optimization {
+               enable = true
+            }`
+);
 g = g.replace('jniLibs.keepDebugSymbols.add("*/arm64-v8a/*.so")\n', 'jniLibs.keepDebugSymbols.add("*/arm64-v8a/*.so")\n');
 writeFileSync(gradle, g);

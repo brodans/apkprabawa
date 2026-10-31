@@ -9,6 +9,11 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-24.04
+    env:
+      ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/prabawa-release.jks
+      ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -33,6 +38,16 @@ jobs:
       - run: npm ci
       - name: Initialize Android project
         run: npm run tauri:android:init
+      - name: Decode and verify Release Keystore
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$ANDROID_KEYSTORE_BASE64" ]; then
+            echo "ERROR: ANDROID_KEYSTORE_BASE64 secret is missing."
+            exit 1
+          fi
+          node -e "const fs = require('fs'); fs.writeFileSync(process.env.RUNNER_TEMP + '/prabawa-release.jks', Buffer.from(process.env.ANDROID_KEYSTORE_BASE64, 'base64'));"
+          ls -l "$RUNNER_TEMP/prabawa-release.jks"
       - name: Build Android APK
         run: npm run tauri:android:build
       - name: Upload Android APK
