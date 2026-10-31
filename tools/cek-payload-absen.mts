@@ -72,7 +72,7 @@ cek('isi payload persis: 6 wajib + mock + 3 suntikan proxy',
 
 console.log('\n=== rpcAbsen:_object dan path');
 cek('object = absen', calls.at(-1)?.body.object === 'absen');
-cek('menuju /api/rpc', calls.at(-1)?.url === '/api/rpc', calls.at(-1)?.url ?? '(tidak ada panggilan)');
+cek('menuju /api/rpc', calls.at(-1)?.url === '/api/rpc' || calls.at(-1)?.url.endsWith('/api/rpc'), calls.at(-1)?.url ?? '(tidak ada panggilan)');
 
 console.log('\n=== rpcAbsen:(absen sambil ngajuin izin');
 await rpcAbsen(ctx, {

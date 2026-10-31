@@ -29,6 +29,7 @@
  */
 
 import { tokenAktif } from './sessionManager';
+import { apiUrl } from './apiBase';
 
 /** Hasil aktivasi, sama bentuknya dengan balasan server. */
 export interface HasilAktivasiKlien {
@@ -60,7 +61,7 @@ export async function aktifkanLangganan(params: {
   metode: 'qris' | 'qris_midtrans' | 'transfer';
   nominal?: number;
 }): Promise<HasilAktivasiKlien> {
-  const response = await fetch('/api/billing/aktivasi', {
+  const response = await fetch(apiUrl('/api/billing/aktivasi'), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

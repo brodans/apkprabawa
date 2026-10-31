@@ -111,21 +111,34 @@ class MainActivity : TauriActivity() {
     val systemIsDark = (resources.configuration.uiMode and
                         Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
     applySystemBarTheme(systemIsDark)
+    window.decorView.post { injectBridge() }
   }
 
   override fun onResume() {
     super.onResume()
     // Injeksi JS bridge ke WebView Tauri. Tauri membuat WebView secara async
-    // di thread Rust/JNI, sehingga kita tunggu sebentar sebelum mencarinya.
+    // di thread Rust/JNI, sehingga kita coba pasang sesegera mungkin.
     if (!bridgeInjected) {
-      mainHandler.postDelayed({ injectBridge() }, 600)
+      mainHandler.postDelayed({ injectBridge() }, 400)
     }
   }
 
   private fun injectBridge() {
     val wv = findWebView(window.decorView) ?: return
-    wv.addJavascriptInterface(PrabawaBridge(), "AndroidPrabawa")
     bridgeInjected = true
+    wv.addJavascriptInterface(PrabawaBridge(), "AndroidPrabawa")
+
+    // Pengaturan penting untuk Midtrans Snap di WebView Android:
+    // 1. domStorageEnabled & databaseEnabled agar iframe Snap dapat menyimpan token & state
+    // 2. third-party cookies diizinkan agar cookie sesi iframe Midtrans tidak diblokir
+    // 3. javaScriptCanOpenWindowsAutomatically untuk popup pembayaran/3DS
+    wv.settings.domStorageEnabled = true
+    wv.settings.databaseEnabled = true
+    wv.settings.javaScriptCanOpenWindowsAutomatically = true
+    val cookieManager = android.webkit.CookieManager.getInstance()
+    cookieManager.setAcceptCookie(true)
+    cookieManager.setAcceptThirdPartyCookies(wv, true)
+
     // Baca tema tersimpan Prabawa dari localStorage dan sinkronkan status bar.
     wv.evaluateJavascript(
       "(function(){ try { return localStorage.getItem('theme') || ''; } catch(e){ return ''; } })()"

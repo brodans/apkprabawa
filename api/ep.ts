@@ -74,14 +74,25 @@ function rewriteLocation(loc) {
   baru = baru.replace(/\/index\.php(\/|$)/g, "/p$1");
   return baru;
 }
-function rewriteSetCookie(cookies) {
+var TAURI_ORIGINS = /* @__PURE__ */ new Set([
+  "tauri://localhost",
+  "http://tauri.localhost",
+  "https://tauri.localhost"
+]);
+function rewriteSetCookie(cookies, origin) {
   const isProd = Boolean(process.env.VERCEL || process.env.VERCEL_ENV);
+  const isTauri = TAURI_ORIGINS.has(origin);
   const list = Array.isArray(cookies) ? cookies : [cookies];
   return list.map((cookie) => {
     let c = cookie.replace(/;\s*domain=[^;]*/gi, "").replace(/;\s*path=[^;]*/gi, "; Path=/ep");
     if (isProd) {
       if (!/;\s*secure/i.test(c)) c += "; Secure";
-      if (!/;\s*samesite=/i.test(c)) c += "; SameSite=Lax";
+      c = c.replace(/;\s*samesite=[^;]*/gi, "");
+      if (isTauri) {
+        c += "; SameSite=None";
+      } else {
+        c += "; SameSite=Lax";
+      }
     } else {
       c = c.replace(/;\s*secure/gi, "");
     }
@@ -193,7 +204,7 @@ async function handler(req, res) {
     if (key.toLowerCase() === "location") {
       res.setHeader("Location", rewriteLocation(value));
     } else if (key.toLowerCase() === "set-cookie") {
-      const rewritten = rewriteSetCookie(value);
+      const rewritten = rewriteSetCookie(value, origin);
       for (const cookie of rewritten) {
         res.appendHeader("Set-Cookie", cookie);
       }

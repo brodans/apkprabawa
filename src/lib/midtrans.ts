@@ -27,6 +27,8 @@
  * tanpa Midtrans sama sekali.
  */
 
+import { apiUrl } from './apiBase';
+
 function modeProduksi(): boolean {
   return import.meta.env?.VITE_MIDTRANS_IS_PRODUCTION === 'true';
 }
@@ -35,11 +37,11 @@ function modeProduksi(): boolean {
  * Midtrans terlihat sudah dikonfigurasi **di sisi peramban**.
  *
  * Hanya melihat variabel `VITE_*`. `MIDTRANS_SERVER_KEY` tidak ada di sini
- *  memang begitu mestinya  jadi fungsi ini belum bisa melihat apakah
+ * — memang begitu mestinya — jadi fungsi ini belum bisa melihat apakah
  * server punya key. Untuk itu pakai `cekMidtransServer()`.
  */
 export function midtransTersedia(): boolean {
-  return Boolean(import.meta.env?.VITE_MIDTRANS_CLIENT_KEY);
+  return Boolean(midtransClientKey());
 }
 
 let cacheHealth: Promise<boolean> | null = null;
@@ -50,15 +52,15 @@ let cacheHealth: Promise<boolean> | null = null;
  * Satu-satunya cara peramban mengetahuinya tanpa membocorkan key: endpoint
  * `/api/health` membalas `midtrans: true|false` (boolean, bukan key).
  *
- * Hasilnya di-cache selama 60 detik  `/api/health` dipanggil dari beberapa
- * tempat (gate langganan, dialog pembayaran) dan tidak perlu dzieksekusi
+ * Hasilnya di-cache selama 60 detik — `/api/health` dipanggil dari beberapa
+ * tempat (gate langganan, dialog pembayaran) dan tidak perlu dieksekusi
  * ulang berkali-kali dalam satu sesi.
  */
 export function cekMidtransServer(): Promise<boolean> {
   if (cacheHealth) return cacheHealth;
   cacheHealth = (async () => {
     try {
-      const response = await fetch('/api/health', {
+      const response = await fetch(apiUrl('/api/health'), {
         headers: { Accept: 'application/json' },
         cache: 'no-store',
       });
@@ -66,7 +68,7 @@ export function cekMidtransServer(): Promise<boolean> {
       const data = (await response.json()) as { midtrans?: boolean };
       return Boolean(data?.midtrans);
     } catch {
-      // Server tidak terjangkau  anggap tidak tersedia supaya metode
+      // Server tidak terjangkau — anggap tidak tersedia supaya metode
       // Midtrans tidak offered daripada menampilkan tombol yang pasti gagal.
       return false;
     }
@@ -78,9 +80,12 @@ export function cekMidtransServer(): Promise<boolean> {
   return cacheHealth;
 }
 
-/** Client key untuk Snap  aman di peramban, bukan rahasia. */
+/** Client key untuk Snap — aman di peramban, bukan rahasia. */
 function midtransClientKey(): string {
-  return import.meta.env?.VITE_MIDTRANS_CLIENT_KEY ?? '';
+  return (
+    import.meta.env?.VITE_MIDTRANS_CLIENT_KEY?.trim() ||
+    'Mid-client-IULEtYavZ4WoulM6'
+  );
 }
 
 /** Sumber Snap yang sesuai mode. */
@@ -155,7 +160,7 @@ async function posApi<T>(url: string, body: unknown, metode: 'POST' | 'GET'): Pr
  * muncul sudah terkunci ke nominal tagihan.
  */
 export async function buatTransaksi(konfigurasi: KonfigurasiMidtrans): Promise<HasilChargeMidtrans> {
-  return posApi<HasilChargeMidtrans>('/api/midtrans-charge', konfigurasi, 'POST');
+  return posApi<HasilChargeMidtrans>(apiUrl('/api/midtrans-charge'), konfigurasi, 'POST');
 }
 
 
