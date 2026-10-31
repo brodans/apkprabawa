@@ -115,50 +115,68 @@
    * Android tanpa cutout), jadi tidak ada yang berubah di sana.
    */
   :root {
+    --sat: env(safe-area-inset-top, 24px);
+    --sab: env(safe-area-inset-bottom, 24px);
     --poni-kiri: env(safe-area-inset-left, 0px);
     --poni-kanan: env(safe-area-inset-right, 0px);
-    --poni-bawah: env(safe-area-inset-bottom, 0px);
-    --poni-atas: env(safe-area-inset-top, 0px);
+    --poni-atas: var(--sat);
+    --poni-bawah: var(--sab);
+    --bottom-sheet-safe-area: 0px;
+  }
+
+  body.is-native {
+    --bottom-sheet-safe-area: var(--sab);
   }
 }
 
 /* Gutter untuk isi halaman; scroll container sendiri tetap selebar viewport
    agar scrollbar berada di tepi kanan, bukan di dalam gutter konten. */
 @layer components {
-  .poni-konten {
+  /* Main konten: selalu berada di atas batas navigation bar */
+  .poni-konten,
+  body.is-native .poni-konten {
     padding-top: 1.25rem;
     padding-left: max(1rem, var(--poni-kiri));
     padding-right: max(1rem, var(--poni-kanan));
-    padding-bottom: max(1rem, var(--poni-bawah));
+    padding-bottom: calc(var(--poni-bawah, var(--sab)) + 1.25rem) !important;
+    box-sizing: border-box !important;
   }
   @media (min-width: 640px) {
-    .poni-konten {
+    .poni-konten,
+    body.is-native .poni-konten {
       padding-top: 1.5rem;
       padding-left: max(1.5rem, var(--poni-kiri));
       padding-right: max(1.5rem, var(--poni-kanan));
-      padding-bottom: max(1.5rem, var(--poni-bawah));
+      padding-bottom: calc(var(--poni-bawah, var(--sab)) + 1.5rem) !important;
     }
   }
   @media (min-width: 1024px) {
-    .poni-konten {
+    .poni-konten,
+    body.is-native .poni-konten {
       padding-top: 1.75rem;
       padding-left: max(2rem, var(--poni-kiri));
       padding-right: max(2rem, var(--poni-kanan));
-      padding-bottom: max(2rem, var(--poni-bawah));
+      padding-bottom: calc(var(--poni-bawah, var(--sab)) + 1.75rem) !important;
     }
   }
 
-  /* Beri ruang nyaman pada kontrol, tanpa memindahkan scroll bar. */
-  .poni-header {
-    padding-top: var(--poni-atas, 0px);
-    height: calc(56px + var(--poni-atas, 0px));
-    padding-left: max(1rem, var(--poni-kiri));
-    padding-right: max(1rem, var(--poni-kanan));
+  /* Beri ruang nyaman pada header/topbar: background mengalir ke bawah status bar tanpa memotong konten */
+  .poni-header,
+  body.is-native .poni-header,
+  body.is-native header.poni-header {
+    padding-top: var(--poni-atas, var(--sat)) !important;
+    min-height: calc(56px + var(--poni-atas, var(--sat))) !important;
+    height: calc(56px + var(--poni-atas, var(--sat))) !important;
+    padding-left: max(1rem, var(--poni-kiri)) !important;
+    padding-right: max(1rem, var(--poni-kanan)) !important;
+    box-sizing: border-box !important;
   }
   @media (min-width: 640px) {
-    .poni-header {
-      padding-left: max(1.5rem, var(--poni-kiri));
-      padding-right: max(1.5rem, var(--poni-kanan));
+    .poni-header,
+    body.is-native .poni-header,
+    body.is-native header.poni-header {
+      padding-left: max(1.5rem, var(--poni-kiri)) !important;
+      padding-right: max(1.5rem, var(--poni-kanan)) !important;
     }
   }
   /* Sidebar — tepi kiri & bawah, karena di HP sidebar menumpuk di atas konten. */
@@ -170,10 +188,35 @@
   @media (max-width: 639px) {
     html, body, #root { width: 100%; min-width: 0; overflow-x: hidden; }
     button, a, input, select, textarea { touch-action: manipulation; }
-    .poni-sidebar {
-      padding-top: max(0.5rem, var(--poni-atas));
-      padding-right: max(0.75rem, var(--poni-kanan));
+    .poni-sidebar,
+    body.is-native .poni-sidebar {
+      padding-top: max(0.5rem, var(--poni-atas, var(--sat))) !important;
+      padding-bottom: max(1rem, var(--poni-bawah, var(--sab))) !important;
+      padding-right: max(0.75rem, var(--poni-kanan)) !important;
+      box-sizing: border-box !important;
     }
+  }
+
+  /* Pastikan elemen fixed bottom terdorong ke atas dengan aman */
+  body.is-native .fixed.bottom-0 {
+    bottom: var(--poni-bawah, var(--sab)) !important;
+  }
+
+  /* -- MIDTRANS SNAP WINDOW SAFE AREA OVERRIDES (persis Mesen.Ae-Capacitor) -- */
+  body.is-native #snap-midtrans,
+  body.is-native .snap-midtrans,
+  body.is-native div[id*="snap-midtrans"],
+  body.is-native iframe[src*="midtrans.com"],
+  body.is-native iframe[id*="snap-midtrans"],
+  #snap-midtrans,
+  .snap-midtrans,
+  div[id*="snap-midtrans"],
+  iframe[src*="midtrans.com"],
+  iframe[id*="snap-midtrans"] {
+    top: var(--poni-atas, var(--sat)) !important;
+    bottom: var(--poni-bawah, var(--sab)) !important;
+    height: calc(100% - var(--poni-atas, var(--sat)) - var(--poni-bawah, var(--sab))) !important;
+    box-sizing: border-box !important;
   }
 }
 

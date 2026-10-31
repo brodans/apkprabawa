@@ -324,7 +324,14 @@ export default function LoginScreen({ onLogin, onLoginStart, isDarkMode, toggleD
     !isLocked && !isAuthing && sanitizeUsername(state.username).length > 0 && sanitizePassword(state.pin).length > 0;
 
   return (
-    <div className="relative min-h-screen flex items-center justify-center p-4 sm:p-8 font-sans transition-colors duration-500 bg-slate-200/80 dark:bg-[#0a0f1c] overflow-hidden selection:bg-indigo-500/30">
+    <div
+      className="relative min-h-screen flex items-center justify-center p-4 sm:p-8 font-sans transition-colors duration-500 bg-slate-200/80 dark:bg-[#0a0f1c] overflow-hidden selection:bg-indigo-500/30"
+      style={{
+        paddingTop: 'max(1rem, var(--poni-atas, 0px))',
+        paddingBottom: 'max(1rem, var(--poni-bawah, 0px))',
+        boxSizing: 'border-box',
+      }}
+    >
       {/* ─── Latar ─────────────────────────────────────────────────── */}
       <div className="absolute inset-0 z-0 pointer-events-none">
         <div className="login-grid-mask absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px] dark:bg-[linear-gradient(to_right,#ffffff0a_1px,transparent_1px),linear-gradient(to_bottom,#ffffff0a_1px,transparent_1px)]" />

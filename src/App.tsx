@@ -1,4 +1,4 @@
-import React, { Suspense, useState } from 'react';
+import React, { Suspense, useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import {
   Camera,
@@ -747,7 +747,7 @@ function StartupShell({ pageId }: { pageId: string }) {
         </nav>
       </aside>
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <header className="poni-header flex h-[56px] shrink-0 items-center justify-between border-b border-slate-200/80 bg-slate-100/80 dark:border-slate-800/80 dark:bg-[#0B1120]/80">
+        <header className="poni-header flex shrink-0 items-center justify-between border-b border-slate-200/80 bg-slate-100/80 dark:border-slate-800/80 dark:bg-[#0B1120]/80">
           <div className="flex min-w-0 items-center gap-3">
             <Skeleton className="h-9 w-9 shrink-0 rounded-xl lg:hidden" />
             <div className="space-y-1.5">
@@ -1306,7 +1306,7 @@ function MainApp({ onLogout, isDarkMode, toggleDarkMode }: { onLogout: () => voi
           isMobileMenuOpen ? 'pointer-events-none lg:pointer-events-auto' : ''
         }`}
       >
-        <header className="poni-header h-[56px] bg-slate-100/80 dark:bg-[#0B1120]/80 backdrop-blur-xl border-b border-slate-200/80 dark:border-slate-800/80 flex items-center justify-between gap-3 transition-colors duration-300 shrink-0 z-20 shadow-sm dark:shadow-slate-900/50">
+        <header className="poni-header bg-slate-100/80 dark:bg-[#0B1120]/80 backdrop-blur-xl border-b border-slate-200/80 dark:border-slate-800/80 flex items-center justify-between gap-3 transition-colors duration-300 shrink-0 z-20 shadow-sm dark:shadow-slate-900/50">
           {/*
            * `min-w-0 flex-1` di kiri, `shrink-0` di kanan.
            *
@@ -1519,6 +1519,19 @@ function MainApp({ onLogout, isDarkMode, toggleDarkMode }: { onLogout: () => voi
 
 export default function App() {
   const { isDarkMode, toggleDarkMode } = useDarkMode();
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const isAndroidApp = Boolean(
+        (window as unknown as Record<string, unknown>).AndroidPrabawa ||
+        /tauri|android/i.test(navigator.userAgent)
+      );
+      if (isAndroidApp) {
+        document.body.classList.add('is-native');
+      }
+    }
+  }, []);
+
   return (
     <AppProvider>
       <ToastProvider>
