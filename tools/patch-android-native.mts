@@ -289,22 +289,32 @@ class MainActivity : TauriActivity() {
    * Dark mode:
    *   isAppearanceLightStatusBars = false → ikon jam/baterai PUTIH
    *   isAppearanceLightNavigationBars = false → tombol navigasi PUTIH
+   *
+   * Kedua bar (status bar atas & navigation bar bawah) harus ikut SAMA tema
+   * yang sedang aktif — dipakai untuk light maupun dark mode.
    */
   private fun applySystemBarTheme(isDark: Boolean) {
     runOnUiThread {
       val barColor = if (isDark) Color.parseColor("#0F172A") else Color.parseColor("#FFFFFF")
+
+      // 1. Bar transparan penuh & tanpa padding decorView → aplikasi mengalir
+      //    dari ujung ke ujung tanpa kotak putih/scrim.
       window.statusBarColor = Color.TRANSPARENT
       window.navigationBarColor = Color.TRANSPARENT
       window.decorView.setPadding(0, 0, 0, 0)
 
+      // 2. Latar belakang window mengikuti tema (turut tertutupi dua bar yang transparan).
       window.setBackgroundDrawable(ColorDrawable(barColor))
       window.decorView.setBackgroundColor(barColor)
 
+      // 3. Tanpa enforcement kontras bawaan Android (scrim putih/abu di status &
+      //    navigation bar) → ikon selalu dihitung dari tema aktif.
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
         window.isStatusBarContrastEnforced = false
         window.isNavigationBarContrastEnforced = false
       }
 
+      // 4. Ikon status bar & navigation bar ikut tema (dipakai light & dark mode).
       val controller = WindowCompat.getInsetsController(window, window.decorView)
       controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_DEFAULT
       controller.isAppearanceLightStatusBars = !isDark

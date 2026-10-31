@@ -64,6 +64,20 @@ export function useDarkMode() {
 
     // Sinkronkan tema ke Android native (status bar / nav bar icons).
     syncThemeToAndroid(isDarkMode);
+
+    // Dengarkan perubahan tema sistem (mis. otomatis saat gelap) — kalau
+    // pengguna belum memilih tema eksplisit, aplikasi ikut mengikuti tema
+    // sistem. Ini juga yang membuat status bar & nav bar Android ikut dark/light.
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    const onSistemChange = (e: MediaQueryListEvent) => {
+      const saved = bacaStorage('theme');
+      if (saved) return; // tema eksplisit pengguna menang atas tema sistem
+      setIsDarkMode(e.matches);
+    };
+    mq.addEventListener?.('change', onSistemChange);
+    return () => {
+      mq.removeEventListener?.('change', onSistemChange);
+    };
   }, [isDarkMode]);
 
   const toggleDarkMode = () => setIsDarkMode(prev => !prev);

@@ -35,11 +35,19 @@
     /* Hilangkan highlight biru saat tap di mobile */
     -webkit-tap-highlight-color: transparent;
     overflow-x: hidden;
-    /* Safe area agar konten web tidak tertutup status bar / navigation bar di Android edge-to-edge */
-    padding-top: env(safe-area-inset-top, 0px);
-    padding-bottom: env(safe-area-inset-bottom, 0px);
-    padding-left: env(safe-area-inset-left, 0px);
-    padding-right: env(safe-area-inset-right, 0px);
+    /* Safe area TIDAK dipasang di sini.
+     *
+     * Penanganan aman-area memang harus ada (status bar / navigation bar di
+     * Android edge-to-edge), tapi itu sudah ditangani oleh `.poni-header`
+     * (padding-top via `--sat`), area scroll `.poni-konten` (padding-bottom via
+     * `--sab`), sidebar, dan elemen fixed (`--sab`) — semuanya lewat variabel
+     * `--sat` / `--sab` yang di-set MainActivity via bridge Android.
+     *
+     * Kalau padding aman-area juga ditulis di `body`, aman-area akan
+     * **dobel** dan konten akan terus miring ke bawah (gap di atas + turun di
+     * bawah). Sekarang aman-area hanya boleh diberi di satu tempat saja:
+     * elemen yang benar-benar perlu area (header, konten, sidebar, fixed).
+     */
   }
 
   html.dark body {
@@ -188,12 +196,18 @@
   /* ─── SIDEBAR FLOAT & CURVE (HANYA DI ANDROID APK - Persis Mesen.Ae-Capacitor) ─── */
   body.is-native .poni-sidebar,
   body.is-native aside.poni-sidebar {
+    /* `top` + `height` sudah cukup: karena `inset-y-0` (top:0;bottom:0) juga
+     * dipakai, deklarasi `bottom` akan diabaikan saat `top`+`height` keduanya
+     * non-auto (aturan CSS over-constrained). Jadi JANGAN sekali pun pakai
+     * `margin-top`/`margin-bottom` di samping `top`/`height` — itu bikin offset
+     * aman-area **dobel** dan sidebar ikut terlalu ke bawah.
+     */
     top: calc(var(--sat) + 0.5rem) !important;
-    margin-top: calc(var(--sat) + 0.5rem) !important;
-    margin-bottom: var(--sab) !important;
-    margin-left: 0 !important;
     height: calc(100dvh - var(--sat) - var(--sab) - 0.5rem) !important;
     max-height: calc(100dvh - var(--sat) - var(--sab) - 0.5rem) !important;
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+    margin-left: 0 !important;
     border-radius: 0 1.25rem 1.25rem 0 !important;
     border-left: none !important;
     border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
@@ -235,6 +249,11 @@
   /* Pastikan elemen fixed bottom terdorong ke atas dengan aman */
   body.is-native .fixed.bottom-0 {
     bottom: var(--poni-bawah, var(--sab)) !important;
+  }
+
+  /* Toast: dorong ke atas aman-area navigation bar di Android */
+  body.is-native .fixed.bottom-4 {
+    bottom: calc(var(--poni-bawah, var(--sab)) + 1rem) !important;
   }
 
   /* -- MIDTRANS SNAP WINDOW SAFE AREA OVERRIDES (persis Mesen.Ae-Capacitor) -- */
