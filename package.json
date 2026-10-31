@@ -14,7 +14,7 @@
     "tauri:build": "tauri build",
     "tauri:android:init": "tauri android init && tsx tools/patch-android-native.mts",
     "tauri:android:dev": "tauri android dev",
-    "tauri:android:build": "tauri android build --apk --target aarch64",
+    "tauri:android:build": "tauri android build --apk --target aarch64 --debug",
     "typecheck": "tsc --noEmit",
     "verifikasi": "npm run typecheck && npm test && npm run build",
     "test": "npm run typecheck:all && tsx tools/cek-payload-absen.mts && tsx tools/cek-proxy-absen.mts && tsx tools/cek-modal-ringan.mts && tsx tools/cek-auto-login.mts && tsx tools/cek-auto-login-pusat.mts && tsx tools/cek-identitas.mts && tsx tools/cek-kalender.mts && tsx tools/cek-langganan.mts && tsx tools/cek-gerbang.mts && tsx tools/cek-bukti.mts && tsx tools/cek-tata-letak-langganan.mts && tsx tools/cek-mock-lokasi.mts && tsx tools/cek-manajemen-akun.mts && tsx tools/cek-kontrak.mts && tsx tools/cek-qris.mts && tsx tools/cek-tagihan.mts && tsx tools/cek-keamanan.mts && tsx tools/cek-sesi.mts && tsx tools/cek-panel-auth.mts && tsx tools/cek-storage.mts && tsx tools/cek-vercel-selfcontained.mts && tsx tools/cek-vercel-build.mts && tsx tools/cek-vercel-deploy.mts && tsx tools/cek-vercel.mts && tsx tools/cek-tagihan-live.mts && tsx tools/cek-bundle-awal.mts && tsx tools/cek-ignore-deploy.mts && tsx tools/cek-deadcode.mts && tsx tools/cek-lokal-cek.mts && tsx tools/cek-id-perangkat.mts && tsx tools/cek-env-lengkap.mts && tsx tools/cek-firestore-awal.mts && tsx tools/cek-performa-sesi.mts && tsx tools/cek-tata-letak-tabel.mts && tsx tools/cek-naskah.mts && tsx tools/cek-bobot-fungsi.mts",
