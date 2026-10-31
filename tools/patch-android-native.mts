@@ -151,5 +151,5 @@ const isiGradle = [
   '}',
   '',
   'apply(from = file("tauri.build.gradle.kts"))',
-].join('\\n');
+].join('\n');
 writeFileSync(gradle, isiGradle);
