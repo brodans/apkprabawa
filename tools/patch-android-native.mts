@@ -81,11 +81,20 @@ import id.go.jatim.prabawa.TauriActivity
 
 class MainActivity : TauriActivity() {
 
+  private var isWorkspaceActive = false
+  private var darkModeActive = false
+
   /** Dipanggil dari JS saat Prabawa mengganti tema (dark/light). */
   inner class PrabawaBridge {
     @JavascriptInterface
     fun setTheme(dark: Boolean) {
       applySystemBarTheme(dark)
+    }
+
+    @JavascriptInterface
+    fun setWorkspaceActive(active: Boolean) {
+      isWorkspaceActive = active
+      applySystemBarTheme(darkModeActive, active)
     }
   }
 
@@ -279,8 +288,8 @@ class MainActivity : TauriActivity() {
   }
 
   /**
-   * Terapkan warna status bar & nav bar persis seperti Mesen.Ae-Capacitor:
-   * Bar transparan penuh sehingga latar aplikasi mengalir dari ujung ke ujung tanpa kotak putih/scrim.
+   * Status bar selalu transparan; navigation bar transparan saat login dan
+   * memakai warna shell saat workspace aktif.
    *
    * Light mode:
    *   isAppearanceLightStatusBars = true  → ikon jam/baterai HITAM
@@ -290,20 +299,25 @@ class MainActivity : TauriActivity() {
    *   isAppearanceLightStatusBars = false → ikon jam/baterai PUTIH
    *   isAppearanceLightNavigationBars = false → tombol navigasi PUTIH
    *
-   * Kedua bar (status bar atas & navigation bar bawah) harus ikut SAMA tema
-   * yang sedang aktif — dipakai untuk light maupun dark mode.
+  * Warna ikon kedua bar tetap mengikuti tema aktif untuk light maupun dark mode.
    */
-  private fun applySystemBarTheme(isDark: Boolean) {
+  private fun applySystemBarTheme(isDark: Boolean, workspaceActive: Boolean = isWorkspaceActive) {
     runOnUiThread {
+      darkModeActive = isDark
+      isWorkspaceActive = workspaceActive
       val barColor = if (isDark) Color.parseColor("#0F172A") else Color.parseColor("#FFFFFF")
+      val navigationBarColor = if (workspaceActive) {
+        if (isDark) Color.parseColor("#0B1120") else Color.parseColor("#F8FAFC")
+      } else {
+        Color.TRANSPARENT
+      }
 
-      // 1. Bar transparan penuh & tanpa padding decorView → aplikasi mengalir
-      //    dari ujung ke ujung tanpa kotak putih/scrim.
+      // Status bar tetap transparan; navigation bar workspace memakai latar solid.
       window.statusBarColor = Color.TRANSPARENT
-      window.navigationBarColor = Color.TRANSPARENT
+      window.navigationBarColor = navigationBarColor
       window.decorView.setPadding(0, 0, 0, 0)
 
-      // 2. Latar belakang window mengikuti tema (turut tertutupi dua bar yang transparan).
+      // 2. Latar belakang window mengikuti tema di balik status bar transparan.
       window.setBackgroundDrawable(ColorDrawable(barColor))
       window.decorView.setBackgroundColor(barColor)
 

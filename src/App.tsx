@@ -854,6 +854,30 @@ function MainApp({ onLogout, isDarkMode, toggleDarkMode }: { onLogout: () => voi
   /** Dialog konfirmasi keluar dari aplikasi (akun panel). */
   const [konfirmasiKeluar, setKonfirmasiKeluar] = useState(false);
 
+  useEffect(() => {
+    const setWorkspaceActive = (active: boolean) => {
+      try {
+        const bridge = (window as unknown as Record<string, unknown>).AndroidPrabawa as
+          | { setWorkspaceActive?: (isActive: boolean) => void }
+          | undefined;
+        if (typeof bridge?.setWorkspaceActive !== 'function') return false;
+        bridge.setWorkspaceActive(active);
+        return true;
+      } catch {
+        return false;
+      }
+    };
+
+    setWorkspaceActive(true);
+    const retries = [50, 150, 300, 600, 1200, 2500, 5000].map(ms =>
+      window.setTimeout(() => setWorkspaceActive(true), ms)
+    );
+    return () => {
+      retries.forEach(window.clearTimeout);
+      setWorkspaceActive(false);
+    };
+  }, []);
+
   /*
    * Filter halaman berdasarkan izin akses pengguna.
    *
