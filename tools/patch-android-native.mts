@@ -97,18 +97,11 @@ import id.go.jatim.prabawa.TauriActivity
 
 class MainActivity : TauriActivity() {
 
-  private var isWorkspaceActive = false
-
   /** Dipanggil dari JS saat Prabawa mengganti tema (dark/light). */
   inner class PrabawaBridge {
     @JavascriptInterface
     fun setTheme(dark: Boolean) {
-      mainHandler.post { applySystemBarTheme(dark, isWorkspaceActive) }
-    }
-
-    @JavascriptInterface
-    fun setWorkspaceActive(active: Boolean, dark: Boolean) {
-      mainHandler.post { applySystemBarTheme(dark, active) }
+      mainHandler.post { applySystemBarTheme(dark) }
     }
   }
 
@@ -315,19 +308,13 @@ class MainActivity : TauriActivity() {
    *
   * Warna ikon kedua bar tetap mengikuti tema aktif untuk light maupun dark mode.
    */
-  private fun applySystemBarTheme(isDark: Boolean, workspaceActive: Boolean = isWorkspaceActive) {
+  private fun applySystemBarTheme(isDark: Boolean) {
     runOnUiThread {
-      isWorkspaceActive = workspaceActive
       val barColor = if (isDark) Color.parseColor("#0F172A") else Color.parseColor("#FFFFFF")
-      val navigationBarColor = if (workspaceActive) {
-        if (isDark) Color.parseColor("#0B1120") else Color.parseColor("#F8FAFC")
-      } else {
-        Color.TRANSPARENT
-      }
 
-      // Status bar tetap transparan; navigation bar workspace memakai latar solid.
+      // Kedua system bar transparan; safe-area CSS menjaga konten di atasnya.
       window.statusBarColor = Color.TRANSPARENT
-      window.navigationBarColor = navigationBarColor
+      window.navigationBarColor = Color.TRANSPARENT
       window.decorView.setPadding(0, 0, 0, 0)
 
       // 2. Latar belakang window mengikuti tema di balik status bar transparan.

@@ -275,14 +275,12 @@ const cargoRelease = readFileSync(join(root, 'src-tauri/Cargo.toml'), 'utf8');
 cek('profile release mengoptimalkan ukuran dan menghapus symbols',
   /\[profile\.release\][\s\S]*?opt-level\s*=\s*"z"[\s\S]*?lto\s*=\s*true[\s\S]*?codegen-units\s*=\s*1[\s\S]*?strip\s*=\s*"symbols"/.test(cargoRelease));
 const nativePatch = readFileSync(join(root, 'tools/patch-android-native.mts'), 'utf8');
-const appThemeBridge = readFileSync(join(root, 'src/App.tsx'), 'utf8');
 cek('tema navbar Android diserialkan di UI thread',
-  /fun setTheme\(dark: Boolean\)\s*\{\s*mainHandler\.post \{ applySystemBarTheme\(dark, isWorkspaceActive\) \}/.test(nativePatch) &&
-    /fun setWorkspaceActive\(active: Boolean, dark: Boolean\)\s*\{\s*mainHandler\.post \{ applySystemBarTheme\(dark, active\) \}/.test(nativePatch));
-cek('workspace meneruskan tema React ke navbar Android',
-  /setWorkspaceActive\?: \(isActive: boolean, darkMode: boolean\) => void/.test(appThemeBridge) &&
-    /bridge\.setWorkspaceActive\(active, isDarkMode\)/.test(appThemeBridge) &&
-    /\}, \[isDarkMode\]\);/.test(appThemeBridge));
+  /fun setTheme\(dark: Boolean\)\s*\{\s*mainHandler\.post \{ applySystemBarTheme\(dark\) \}/.test(nativePatch) &&
+    /window\.navigationBarColor = Color\.TRANSPARENT/.test(nativePatch) &&
+    /controller\.isAppearanceLightNavigationBars = !isDark/.test(nativePatch));
+cek('warna navigation bar tidak dipaksa oleh status workspace',
+  !/setWorkspaceActive/.test(nativePatch) && !/setWorkspaceActive/.test(readFileSync(join(root, 'src/App.tsx'), 'utf8')));
 cek('template Android memakai Theme.app yang dipasang pada manifest',
   nativePatch.includes('android:theme="@style/Theme.app"') &&
     nativePatch.includes('style name="Theme.app"'));
