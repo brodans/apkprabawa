@@ -177,7 +177,8 @@
   }
 
   /* Paint an opaque theme-matched strip behind Android's transparent nav bar. */
-  body.is-native .poni-workspace::after {
+  body.is-native .poni-workspace::after,
+  body.is-native .poni-startup-shell::after {
     content: "";
     position: absolute;
     z-index: 39;
