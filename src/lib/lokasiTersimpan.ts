@@ -1,38 +1,4 @@
-/**
- * Penyimpanan titik absen  **milik satu akun, tidak berbagi**.
- *
- * ## Bug yang ditutup modul ini
- *
- * Versi lama memakai dua kunci `localStorage` yang bersifat global:
- *
- * ```
- * epresensi_jatim_lokasi_saya
- * epresensi_jatim_lokasi_aktif
- * ```
- *
- * Artinya: whoever login terakhir di peramban itu yang "memiliki" titiknya.
- * Login sebagai `budi` lalu logout, login sebagai `sari`, dan Sari langsung
- * melihat seluruh titik yang Budi buat  lengkap dengan koordinat Gamma
- * kantor. Sebaliknya, menimpa titik Budi karena membuat titik sendiri.
- *
- * Ini bukan sekadar tidak rapi. Titik absen menentukan koordinat yang dikirim
- * ke `absen` / `cekabsen` sebagai `last_latlong`, dan titik aktif menentukan
- * geofence. Dua orang berbagi satu daftar berarti satu orang bisa absen dengan
- * titik milik orang lain.
- *
- * ## Namespace per akun
- *
- * Kunci sekarang berakhiran username yang sudah disanitasi:
- * `epresensi_jatim_lokasi__budi`. Akun A tidak pernah membaca akun B karena
- * kuncinya berbeda, dan mengosongkan akun B tidak menyentuh akun A.
- *
- * ## Migrasi
- *
- * Data kunci lama **tidak** dipindahkan ke akun mana pun secara otomatis.
- * Mengambilnya secara otomatis justru mempertahankan kebocoran yang sama:
- * data bersama tidak bisa diketahui milik siapa. Admin cukup menyuruh pengguna
- * membuat titiknya sekali lagi.
- */
+/** Titik lokal per akun disimpan di IndexedDB; tidak disinkronkan ke Firebase. */
 
 export interface TitikAbsen {
   id: string;
@@ -44,11 +10,22 @@ export interface TitikAbsen {
   dibuatPada: number;
 }
 
-/** Batas jumlah titik agar `localStorage` tidak membengkak. */
+/** Batas jumlah titik per akun. */
 const MAX_TITIK = 40;
+const DB_NAME = 'prabawa-lokasi';
+const DB_VERSION = 1;
+const STORE_NAME = 'akun';
+
+interface RekamanTitik {
+  akun: string;
+  titik: TitikAbsen[];
+  aktifId: string | null;
+}
+
+let databasePromise: Promise<IDBDatabase> | null = null;
 
 function isBrowser(): boolean {
-  return typeof window !== 'undefined';
+  return typeof window !== 'undefined' && typeof indexedDB !== 'undefined';
 }
 
 /**
@@ -66,84 +43,42 @@ function kunciAkun(username: string): string {
   return bersih || 'tanpa-nama';
 }
 
-/** `localStorage` key untuk daftar titik milik satu akun. */
+/** Kunci localStorage lama, hanya dipakai untuk migrasi satu kali. */
 export function kunciTitik(username: string): string {
   return `epresensi_jatim_lokasi__${kunciAkun(username)}`;
 }
 
-/** `localStorage` key untuk titik aktif milik satu akun. */
+/** Kunci localStorage lama, hanya dipakai untuk migrasi satu kali. */
 function kunciTitikAktif(username: string): string {
   return `epresensi_jatim_lokasi_aktif__${kunciAkun(username)}`;
 }
 
-/** Pindahkan titik-titik lokal lama saat akun berganti username. */
-export function migrasiTitikUsernameLokal(usernameBaru: string, usernameSebelumnya: string[]): void {
-  if (!isBrowser() || !usernameBaru || !Array.isArray(usernameSebelumnya)) return;
-  const tujuan = kunciTitik(usernameBaru);
-  const tujuanAktif = kunciTitikAktif(usernameBaru);
-  try {
-    for (const usernameLama of usernameSebelumnya) {
-      if (!usernameLama || usernameLama === usernameBaru) continue;
-      const asal = kunciTitik(usernameLama);
-      const asalAktif = kunciTitikAktif(usernameLama);
-      const daftarLama = localStorage.getItem(asal);
-      if (!daftarLama) continue;
-      if (localStorage.getItem(tujuan)) continue;
-      localStorage.setItem(tujuan, daftarLama);
-      if (localStorage.getItem(tujuan) !== daftarLama) continue;
-      if (!localStorage.getItem(tujuanAktif)) {
-        const aktifLama = localStorage.getItem(asalAktif);
-        if (aktifLama) localStorage.setItem(tujuanAktif, aktifLama);
+function bukaDatabase(): Promise<IDBDatabase> {
+  if (!isBrowser()) return Promise.reject(new Error('IndexedDB tidak tersedia di perangkat ini.'));
+  if (databasePromise) return databasePromise;
+  const opening = new Promise<IDBDatabase>((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, DB_VERSION);
+    request.onupgradeneeded = () => {
+      if (!request.result.objectStoreNames.contains(STORE_NAME)) {
+        request.result.createObjectStore(STORE_NAME, { keyPath: 'akun' });
       }
-      localStorage.removeItem(asal);
-      localStorage.removeItem(asalAktif);
-    }
-  } catch {
-    // Kegagalan storage lokal tidak boleh menggagalkan login; data asal tetap
-    // dipertahankan jika penyalinan ke kunci baru gagal.
-  }
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error ?? new Error('Gagal membuka penyimpanan lokasi.'));
+    request.onblocked = () => reject(new Error('Tutup tab aplikasi lain untuk memperbarui penyimpanan lokasi.'));
+  });
+  databasePromise = opening.catch(error => {
+    databasePromise = null;
+    throw error;
+  });
+  return databasePromise!;
 }
 
-/**
- * Guard untuk pemanggil tanpa akun.
- *
- * Melempar error jauh lebih baik daripada menulis ke kunci bersama: aksi
- * yang ditolak dengan jelas bisa diperbaiki, sedangkan yang diam-diam ditulis
- * ke tempat yang salah akan ditemukan weeks kemudian.
- */
-function namaKosong(): never {
-  throw new Error('Username wajib diisi untuk menyimpan titik absen.');
-}
-
-// 
-//  Daftar titik
-// 
-
-/** Baca daftar titik milik `username`; selalu mengembalikan array valid. */
-export function bacaTitik(username: string): TitikAbsen[] {
-  if (!isBrowser()) return [];
-  if (!username) return [];
-  try {
-    const raw = localStorage.getItem(kunciTitik(username));
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    if (!parsed) return [];
-    if (!Array.isArray(parsed)) return [];
-    return parsed
-      .map(saringTitik)
-      .filter((item): item is TitikAbsen => item !== null);
-  } catch {
-    return [];
-  }
-}
-
-/** Buang entri yang tidak valid, sekaligus isi field yang hilang. */
 function saringTitik(item: any): TitikAbsen | null {
   if (!item || typeof item !== 'object') return null;
   const latitude = Number(item.latitude);
   const longitude = Number(item.longitude);
   if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
-  // Koordinat di luar bumi berarti data rusak, bukan lokasi yang valid.
   if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) return null;
   return {
     id: String(item.id ?? `lokal-${Math.random().toString(36).slice(2, 10)}`),
@@ -155,50 +90,150 @@ function saringTitik(item: any): TitikAbsen | null {
   };
 }
 
-/** Simpan daftar titik milik `username`; mengembalikan yang benar-benar tersimpan. */
-export function simpanTitik(username: string, items: TitikAbsen[]): TitikAbsen[] {
-  if (!username) namaKosong();
-  const trimmed = items.slice(0, MAX_TITIK);
-  if (isBrowser()) {
-    try {
-      localStorage.setItem(kunciTitik(username), JSON.stringify(trimmed));
-    } catch {
-      // `localStorage` penuh atau ditolak  daftar di memori tetap jalan.
-    }
+function normalisasiRekaman(value: unknown, akun: string): RekamanTitik | null {
+  if (!value || typeof value !== 'object') return null;
+  const record = value as Partial<RekamanTitik>;
+  const titik = Array.isArray(record.titik)
+    ? record.titik.map(saringTitik).filter((item): item is TitikAbsen => item !== null).slice(0, MAX_TITIK)
+    : [];
+  const aktifId = typeof record.aktifId === 'string' && titik.some(item => item.id === record.aktifId)
+    ? record.aktifId
+    : null;
+  return { akun, titik, aktifId };
+}
+
+async function bacaRekamanDatabase(username: string): Promise<RekamanTitik | null> {
+  const database = await bukaDatabase();
+  return new Promise((resolve, reject) => {
+    const transaction = database.transaction(STORE_NAME, 'readonly');
+    const request = transaction.objectStore(STORE_NAME).get(kunciAkun(username));
+    let result: RekamanTitik | null = null;
+    request.onsuccess = () => {
+      result = normalisasiRekaman(request.result, kunciAkun(username));
+    };
+    transaction.oncomplete = () => resolve(result);
+    transaction.onerror = () => reject(transaction.error ?? new Error('Gagal membaca titik absen.'));
+    transaction.onabort = () => reject(transaction.error ?? new Error('Pembacaan titik absen dibatalkan.'));
+  });
+}
+
+async function tulisRekaman(record: RekamanTitik): Promise<void> {
+  const database = await bukaDatabase();
+  return new Promise((resolve, reject) => {
+    const transaction = database.transaction(STORE_NAME, 'readwrite');
+    transaction.objectStore(STORE_NAME).put(record);
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () => reject(transaction.error ?? new Error('Gagal menyimpan titik absen.'));
+    transaction.onabort = () => reject(transaction.error ?? new Error('Penyimpanan titik absen dibatalkan.'));
+  });
+}
+
+async function hapusRekamanDatabase(username: string): Promise<void> {
+  const database = await bukaDatabase();
+  return new Promise((resolve, reject) => {
+    const transaction = database.transaction(STORE_NAME, 'readwrite');
+    transaction.objectStore(STORE_NAME).delete(kunciAkun(username));
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () => reject(transaction.error ?? new Error('Gagal menghapus titik absen.'));
+    transaction.onabort = () => reject(transaction.error ?? new Error('Penghapusan titik absen dibatalkan.'));
+  });
+}
+
+async function bacaRekaman(username: string): Promise<RekamanTitik | null> {
+  if (!username) return null;
+  const tersimpan = await bacaRekamanDatabase(username);
+  if (tersimpan) return tersimpan;
+
+  if (typeof localStorage === 'undefined') return null;
+  const kunciDaftar = kunciTitik(username);
+  const raw = localStorage.getItem(kunciDaftar);
+  if (!raw) return null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    localStorage.removeItem(kunciDaftar);
+    localStorage.removeItem(kunciTitikAktif(username));
+    return null;
   }
+  if (!Array.isArray(parsed)) return null;
+  const titik = parsed.map(saringTitik).filter((item): item is TitikAbsen => item !== null).slice(0, MAX_TITIK);
+  const requestedActive = localStorage.getItem(kunciTitikAktif(username));
+  const aktifId = requestedActive && titik.some(item => item.id === requestedActive) ? requestedActive : null;
+  const record = { akun: kunciAkun(username), titik, aktifId };
+  await tulisRekaman(record);
+  localStorage.removeItem(kunciDaftar);
+  localStorage.removeItem(kunciTitikAktif(username));
+  return record;
+}
+
+/** Pindahkan titik akun lama saat username berubah; data titik tidak dikirim ke server. */
+export async function migrasiTitikUsernameLokal(usernameBaru: string, usernameSebelumnya: string[]): Promise<void> {
+  if (!usernameBaru || !Array.isArray(usernameSebelumnya)) return;
+  const tujuan = await bacaRekaman(usernameBaru);
+  if (tujuan) return;
+  for (const usernameLama of usernameSebelumnya) {
+    if (!usernameLama || kunciAkun(usernameLama) === kunciAkun(usernameBaru)) continue;
+    const asal = await bacaRekaman(usernameLama);
+    if (!asal) continue;
+    await tulisRekaman({ ...asal, akun: kunciAkun(usernameBaru) });
+    await hapusRekamanDatabase(usernameLama);
+    if (typeof localStorage !== 'undefined') {
+      localStorage.removeItem(kunciTitik(usernameLama));
+      localStorage.removeItem(kunciTitikAktif(usernameLama));
+    }
+    return;
+  }
+}
+
+function namaKosong(): never {
+  throw new Error('Username wajib diisi untuk menyimpan titik absen.');
+}
+
+/** Baca daftar titik akun dari IndexedDB. */
+export async function bacaTitik(username: string): Promise<TitikAbsen[]> {
+  return (await bacaRekaman(username))?.titik ?? [];
+}
+
+/** Simpan daftar titik akun ke IndexedDB. */
+export async function simpanTitik(username: string, items: TitikAbsen[]): Promise<TitikAbsen[]> {
+  if (!username) namaKosong();
+  const trimmed = items.map(saringTitik).filter((item): item is TitikAbsen => item !== null).slice(0, MAX_TITIK);
+  const current = await bacaRekaman(username);
+  const aktifId = current?.aktifId && trimmed.some(item => item.id === current.aktifId) ? current.aktifId : null;
+  await tulisRekaman({ akun: kunciAkun(username), titik: trimmed, aktifId });
   return trimmed;
 }
 
 /** Tambahkan titik baru ke awal daftar. */
-export function tambahTitik(
+export async function tambahTitik(
   username: string,
   titik: Omit<TitikAbsen, 'id' | 'dibuatPada'>
-): TitikAbsen[] {
+): Promise<TitikAbsen[]> {
   if (!username) namaKosong();
   const entry: TitikAbsen = {
     ...titik,
     id: `lokal-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
     dibuatPada: Date.now(),
   };
-  return simpanTitik(username, [entry, ...bacaTitik(username)]);
+  return simpanTitik(username, [entry, ...(await bacaTitik(username))]);
 }
 
 /** Hapus satu titik milik `username`. */
-export function hapusTitik(username: string, id: string): TitikAbsen[] {
-  return simpanTitik(
-    username,
-    bacaTitik(username).filter(item => item.id !== id)
-  );
+export async function hapusTitik(username: string, id: string): Promise<TitikAbsen[]> {
+  const current = await bacaRekaman(username);
+  const titik = (current?.titik ?? []).filter(item => item.id !== id);
+  await tulisRekaman({ akun: kunciAkun(username), titik, aktifId: current?.aktifId === id ? null : current?.aktifId ?? null });
+  return titik;
 }
 
 /** Bersihkan seluruh titik milik `username`  dan hanya miliknya. */
-export function bersihkanSemua(username: string): void {
-  if (!isBrowser() || !username) return;
-  try {
+export async function bersihkanSemua(username: string): Promise<void> {
+  if (!username) return;
+  await hapusRekamanDatabase(username);
+  if (typeof localStorage !== 'undefined') {
     localStorage.removeItem(kunciTitik(username));
     localStorage.removeItem(kunciTitikAktif(username));
-  } catch {
-    // diam-diam
   }
 }
 
@@ -216,8 +251,8 @@ export interface RingkasanTitik {
   dipakai: boolean;
 }
 
-export function ringkasanTitik(username: string): RingkasanTitik[] {
-  return bacaTitik(username).map(item => ({
+export async function ringkasanTitik(username: string): Promise<RingkasanTitik[]> {
+  return (await bacaTitik(username)).map(item => ({
     nama: item.nama,
     latitude: item.latitude,
     longitude: item.longitude,
@@ -237,45 +272,34 @@ export function ringkasanTitik(username: string): RingkasanTitik[] {
  * sekali. Kalau akun ini belum punya yang ditandai, pemanggil harus
  * menanyakan lewat peta  **bukan** jatuh ke titik milik akun lain.
  */
-export function bacaTitikAktif(username: string): TitikAbsen | null {
-  if (!isBrowser() || !username) return null;
-  try {
-    const id = localStorage.getItem(kunciTitikAktif(username));
-    if (!id) return null;
-    return bacaTitik(username).find(item => item.id === id) ?? null;
-  } catch {
-    return null;
-  }
+export async function bacaTitikAktif(username: string): Promise<TitikAbsen | null> {
+  const record = await bacaRekaman(username);
+  return record?.titik.find(item => item.id === record.aktifId) ?? null;
 }
 
 /** Tandai titik sebagai koordinat absen (radio  satu titik saja). */
-export function setTitikAktif(username: string, id: string): void {
-  if (!isBrowser() || !username) return;
-  // Radio: tandai yang baru, lepas yang lain. Dua titik "aktif" sekaligus
-  // membuat `bacaTitikAktif` mengembalikan yang pertama, dan pengguna tidak
-  // pernah tahu absennya sebenarnya pakai titik yang mana.
-  const sekarang = bacaTitik(username);
+export async function setTitikAktif(username: string, id: string): Promise<void> {
+  if (!username) return;
+  const record = await bacaRekaman(username);
+  const sekarang = record?.titik ?? [];
   const ada = sekarang.some(item => item.id === id);
   if (!ada) return;
-  simpanTitik(
-    username,
-    sekarang.map(item => ({ ...item, dipakai: item.id === id }))
-  );
-  try {
-    localStorage.setItem(kunciTitikAktif(username), id);
-  } catch {
-    // abaikan
-  }
+  await tulisRekaman({
+    akun: kunciAkun(username),
+    titik: sekarang.map(item => ({ ...item, dipakai: item.id === id })),
+    aktifId: id,
+  });
 }
 
 /** Kosongkan pilihan titik absen milik `username`. */
-export function clearTitikAktif(username: string): void {
-  if (!isBrowser() || !username) return;
-  try {
-    localStorage.removeItem(kunciTitikAktif(username));
-  } catch {
-    // abaikan
-  }
+export async function clearTitikAktif(username: string): Promise<void> {
+  const record = await bacaRekaman(username);
+  if (!record) return;
+  await tulisRekaman({
+    ...record,
+    aktifId: null,
+    titik: record.titik.map(item => ({ ...item, dipakai: false })),
+  });
 }
 
 /**
@@ -285,37 +309,42 @@ export function clearTitikAktif(username: string): void {
  * koordinat yang dikirim, jadi memindahkan titik "dipakai" ke lokasi yang
  * baru saja dipakai membuat absen berikutnya konsisten.
  */
-export function jadikanAktif(username: string, titik: Omit<TitikAbsen, 'id' | 'dibuatPada'>): TitikAbsen[] {
-  const list = bacaTitik(username);
+export async function jadikanAktif(username: string, titik: Omit<TitikAbsen, 'id' | 'dibuatPada'>): Promise<TitikAbsen[]> {
+  const record = await bacaRekaman(username);
+  const list = record?.titik ?? [];
   const ada = list.find(
     item =>
       Math.abs(item.latitude - titik.latitude) < 1e-6 && Math.abs(item.longitude - titik.longitude) < 1e-6
   );
 
   if (ada) {
-    setTitikAktif(username, ada.id);
-    return simpanTitik(
-      username,
-      list.map(item => ({ ...item, dipakai: item.id === ada.id }))
-    );
+    const aktif = list.map(item => ({ ...item, dipakai: item.id === ada.id }));
+    await tulisRekaman({ akun: kunciAkun(username), titik: aktif, aktifId: ada.id });
+    return aktif;
   }
 
   /*
    * Titik baru.
    *
    *  Penunjuk aktif **harus** ditulis di sini juga, bukan cuma flag
-   * `dipakai`. `bacaTitikAktif()` membaca kunci terpisah, bukan mencari
-   * titik yang `dipakai`  jadi kalau hanya flag-nya yang di-set, fungsi itu
-   * mengembalikan `null`, `useServerContext` mengirim `last_latlong: ''`, dan
-   * tombol "Cek Absensi" tetap terkunci walaupun titik baru saja dibuat.
+  * `dipakai`. `bacaTitikAktif()` memakai `aktifId` pada record IndexedDB,
+  * jadi kalau hanya flag-nya yang di-set, fungsi itu mengembalikan `null`,
+  * `useServerContext` mengirim `last_latlong: ''`, dan tombol "Cek Absensi"
+  * tetap terkunci walaupun titik baru saja dibuat.
    *
    * Gejalanya menipu: pengguna melihat "Kantor Pusat" ditandai aktif
    * di daftar, lalu absennya ditolak karena koordinat kosong  dan tidak ada
    * yang menyuruh dia melihat ke mana pun untuk memperbaikinya.
    */
-  const baru = tambahTitik(username, { ...titik, dipakai: true })[0];
-  if (baru) setTitikAktif(username, baru.id);
-  return bacaTitik(username);
+  const baru: TitikAbsen = {
+    ...titik,
+    id: `lokal-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    dibuatPada: Date.now(),
+    dipakai: true,
+  };
+  const hasil = [baru, ...list].slice(0, MAX_TITIK);
+  await tulisRekaman({ akun: kunciAkun(username), titik: hasil, aktifId: baru.id });
+  return hasil;
 }
 
 // 

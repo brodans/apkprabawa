@@ -91,14 +91,24 @@ export default function LokasiAbsen() {
     void loadData();
   }, [loadData]);
 
-  // Muat ulang saat ganti akun. `bacaTitik(username)` mengembalikan `[]` untuk
-  // akun tanpa titik, jadi daftar lama langsung hilang.
+  // Muat ulang dari IndexedDB saat ganti akun; jangan tampilkan titik akun lama.
   useEffect(() => {
-    setMilikSaya(bacaTitik(username));
+    let aktif = true;
+    setMilikSaya([]);
+    void bacaTitik(username)
+      .then(titik => {
+        if (aktif) setMilikSaya(titik);
+      })
+      .catch(() => {
+        if (aktif) toast.error('Gagal membaca titik dari penyimpanan perangkat.');
+      });
     // Buang kunci lama yang menyimpan titik BERSAMA antar akun. Sekali saja
     // per buka halaman — tidak dipindahkan ke akun mana pun, karena
     // data bersama tidak bisa diketahui milik siapa.
     buangTitikLegacy();
+    return () => {
+      aktif = false;
+    };
   }, [username]);
 
   // ── Titik untuk peta ─────────────────────────────────────────────
@@ -175,7 +185,7 @@ export default function LokasiAbsen() {
     );
   };
 
-  const simpanDraf = () => {
+  const simpanDraf = async () => {
     if (!draf) return;
     const latitude = Number(draf.latitude);
     const longitude = Number(draf.longitude);
@@ -196,20 +206,29 @@ export default function LokasiAbsen() {
       return;
     }
 
-    const entry = tambahTitik(username, {
-      nama: draf.nama.trim() || `Titik ${milikSaya.length + 1}`,
-      latitude,
-      longitude,
-      dipakai: false,
-    });
-    setMilikSaya(entry);
-    setDraf(null);
-    setTerpilih(null);
-    toast.success('Titik disimpan di perangkat ini.');
+    try {
+      const entry = await tambahTitik(username, {
+        nama: draf.nama.trim() || `Titik ${milikSaya.length + 1}`,
+        latitude,
+        longitude,
+        dipakai: false,
+      });
+      setMilikSaya(entry);
+      setDraf(null);
+      setTerpilih(null);
+      toast.success('Titik disimpan di perangkat ini.');
+    } catch {
+      toast.error('Titik gagal disimpan ke penyimpanan perangkat.');
+    }
   };
 
-  const pakai = (id: string) => {
-    setTitikAktif(username, id);
+  const pakai = async (id: string) => {
+    try {
+      await setTitikAktif(username, id);
+    } catch {
+      toast.error('Titik gagal diaktifkan.');
+      return;
+    }
     setMilikSaya(prev => prev.map(item => ({ ...item, dipakai: item.id === id })));
     // Segarkan juga koordinat yang disuntik ke panggilan berikutnya. Tanpa
     // ini, `context.lastLatLong` masih koordinat lama sampai polling 5 detik
@@ -220,38 +239,53 @@ export default function LokasiAbsen() {
     toast.success(`"${nama}" menjadi koordinat absen di halaman Presensi.`);
   };
 
-  const pakaiTitikServer = (location: LokasiView) => {
+  const pakaiTitikServer = async (location: LokasiView) => {
     // Titik server bisa langsung dipakai sebagai koordinat absen dengan
     // menyalinnya ke daftar lokal — tidak perlu mengetik koordinat.
     // `jadikanAktif` menyalin titik kalau belum ada, lalu menandainya.
     // `tambahTitik` + `setTitikAktif` terpisah bisa menyisakan dua titik
     // "dipakai" kalau salah satunya gagal di tengah jalan.
-    const entry = jadikanAktif(username, {
-      nama: location.nama || location.satuanKerja || `Titik ${location.id}`,
-      latitude: location.latitude as number,
-      longitude: location.longitude as number,
-      dipakai: true,
-    });
-    setMilikSaya(entry);
-    segarkanTitik();
-    toast.success('Titik kantor disalin ke daftar dan langsung dipakai untuk absensi.');
+    try {
+      const entry = await jadikanAktif(username, {
+        nama: location.nama || location.satuanKerja || `Titik ${location.id}`,
+        latitude: location.latitude as number,
+        longitude: location.longitude as number,
+        dipakai: true,
+      });
+      setMilikSaya(entry);
+      segarkanTitik();
+      toast.success('Titik kantor disalin ke daftar dan langsung dipakai untuk absensi.');
+    } catch {
+      toast.error('Titik kantor gagal disimpan ke perangkat.');
+    }
   };
 
-  const hapus = (id: string) => {
-    setMilikSaya(hapusTitik(username, id));
+  const hapus = async (id: string) => {
+    try {
+      setMilikSaya(await hapusTitik(username, id));
+    } catch {
+      toast.error('Titik gagal dihapus.');
+      return;
+    }
     if (terpilih === id) setTerpilih(null);
-    if (titikAbsen?.id === id) clearTitikAktif(username);
+    if (titikAbsen?.id === id) await clearTitikAktif(username);
+    segarkanTitik();
     toast.success('Titik dihapus dari daftar akun ini.');
   };
 
-  const bersihkan = () => {
+  const bersihkan = async () => {
     setKonfirmasiBersihkan(false);
     // Hanya titik akun ini. `bersihkanSemua()` tanpa username menghapus kunci
     // global — yang justru menjadi bug aslinya.
-    bersihkanSemua(username);
-    setMilikSaya([]);
-    setTerpilih(null);
-    toast.success('Semua titik lokal akun ini dihapus.');
+    try {
+      await bersihkanSemua(username);
+      setMilikSaya([]);
+      setTerpilih(null);
+      segarkanTitik();
+      toast.success('Semua titik lokal akun ini dihapus.');
+    } catch {
+      toast.error('Titik gagal dihapus dari perangkat.');
+    }
   };
 
   return (

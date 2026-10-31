@@ -221,7 +221,7 @@ interface AppContextType {
    * `token` wajib diisi — lihat catatan panjang di implementasinya. Melewatkannya
    * berarti menyimpan `role` tanpa bukti, dan modul sesi akan menolaknya.
    */
-  setCurrentUser: (user: UserAccountSafe | null, token?: string) => void;
+  setCurrentUser: (user: UserAccountSafe | null, token?: string) => Promise<void>;
   userRole: UserRole;
   /**
    * Izin tab & aksi — **hasil verifikasi server**, bukan input peramban.
@@ -402,7 +402,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
         // Peran & izin datang dari server, bukan dari storage.
         const izinServer = batasiIzin(hasil.akun.permissions, hasil.akun.role);
-        migrasiTitikUsernameLokal(hasil.akun.username, hasil.akun.usernameSebelumnya ?? []);
+        await migrasiTitikUsernameLokal(
+          hasil.akun.username,
+          hasil.akun.usernameSebelumnya ?? []
+        ).catch(error => console.warn('[AppContext] Migrasi titik lokal gagal.', error));
+        if (!hidup) return;
         setCurrentUserState(hasil.akun);
         setTabPermissionsState(izinServer);
         setServerAutoLoginPending(!sudahKeluarServer(hasil.akun.username));
@@ -450,7 +454,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
    * apa adanya: `batasiIzin` memastikan izin khusus admin mati untuk
    * non-admin apa pun isi dokumennya.
    */
-  const setCurrentUser = React.useCallback((user: UserAccountSafe | null, token?: string) => {
+  const setCurrentUser = React.useCallback(async (user: UserAccountSafe | null, token?: string) => {
     if (!user) {
       // Logout — bersihkan seluruh data.
       clearAllSessions();
@@ -519,7 +523,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    migrasiTitikUsernameLokal(user.username, user.usernameSebelumnya ?? []);
+    await migrasiTitikUsernameLokal(user.username, user.usernameSebelumnya ?? [])
+      .catch(error => console.warn('[AppContext] Migrasi titik lokal gagal.', error));
     setCurrentUserState(user);
     setTabPermissionsState(permissions);
     saveSession(user, permissions, token);

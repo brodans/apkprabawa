@@ -27,6 +27,7 @@
 
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { epTargetOrigin } from '../lib/epTarget';
+import { terapkanCors } from './_cors';
 
 const TARGET = epTargetOrigin();
 const TARGET_ORIGIN = new URL(TARGET).origin;
@@ -133,10 +134,14 @@ function rewriteSetCookie(cookies: string | string[], origin: string): string[] 
 
 export default async function handler(req: IncomingMessage & { url?: string; method?: string; headers: Record<string, string | string[] | undefined> }, res: ServerResponse): Promise<void> {
   const origin = typeof req.headers.origin === 'string' ? req.headers.origin : '';
+  if (!terapkanCors(res, origin || undefined)) {
+    res.statusCode = 403;
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.end('Origin tidak diizinkan.');
+    return;
+  }
   if (origin) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
     res.setHeader('Access-Control-Allow-Credentials', 'true');
-    res.setHeader('Vary', 'Origin');
   }
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS,HEAD');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept');

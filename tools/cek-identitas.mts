@@ -255,6 +255,26 @@ console.log('\n=== Path logo di appIdentity.ts benar-benar ada');
 // itu satu sama lain, bukan keberadaan konstanta.
 cek(`APP_LOGO → ${APP_LOGO}`, existsSync(join(root, 'public', APP_LOGO.replace(/^\//, ''))));
 
+console.log('\n=== Ikon paket Linux AppImage');
+const tauriConfig = JSON.parse(readFileSync(join(root, 'src-tauri/tauri.conf.json'), 'utf8'));
+const linuxIcons = ['icons/32x32.png', 'icons/128x128.png', 'icons/128x128@2x.png'];
+for (const icon of linuxIcons) {
+  const path = join(root, 'src-tauri', icon);
+  cek(`ikon Tauri ${icon} terdaftar dan ada`, tauriConfig.bundle.icon.includes(icon) && existsSync(path));
+  const png = readFileSync(path);
+  const width = png.readUInt32BE(16);
+  const height = png.readUInt32BE(20);
+  const expectedSize = icon === 'icons/32x32.png' ? 32 : icon === 'icons/128x128.png' ? 128 : 256;
+  cek(`${icon} berukuran ${expectedSize}x${expectedSize}`, width === expectedSize && height === expectedSize,
+    `${width}x${height}`);
+}
+cek('AppImage adalah target bundle Linux', tauriConfig.bundle.targets.includes('appimage'));
+cek('AppImage tidak membundel media framework sistem',
+  tauriConfig.bundle.linux.appimage.bundleMediaFramework === false);
+const cargoRelease = readFileSync(join(root, 'src-tauri/Cargo.toml'), 'utf8');
+cek('profile release mengoptimalkan ukuran dan menghapus symbols',
+  /\[profile\.release\][\s\S]*?opt-level\s*=\s*"z"[\s\S]*?lto\s*=\s*true[\s\S]*?codegen-units\s*=\s*1[\s\S]*?strip\s*=\s*"symbols"/.test(cargoRelease));
+
 // ═════════════════════════════════════════════════════════════════════
 console.log('\n=== Deskripsi: index.html dan manifest.json harus sama');
 /*
@@ -330,7 +350,6 @@ const ditampilkan = [
   'src/App.tsx',
   'src/components/LoginScreen.tsx',
   'src/pages/Beranda.tsx',
-  'src/pages/Docs.tsx',
   'src/lib/appIdentity.ts',
 ];
 for (const f of ditampilkan) {
@@ -366,12 +385,8 @@ function adaEpresensiDiKode(src: string): boolean {
    * `epresensi-bkdjatim` bukan nama lama kita — itu nama cookie sesi yang
    * benar-benar diterbitkan server e-Presensi, dan itu diputuskan di sana.
    *
-   * Halaman Docs sengaja menampilkannya: itu dokumentasi protokol hulu. Kalau
-   * nama yang ditampilkan diganti, dokumentasinya jadi salah — dan orang yang
-   * mengikuti langkah Docs tidak akan pernah menemukan cookie-nya di DevTools.
-   *
-   * Sama seperti `epresensi_jatim_*` di atas: protocol/identifier dibiarkan,
-   * merek yang dilihat pengguna yang wajib hilang.
+  * Identifier cookie dibiarkan apa adanya; merek yang dilihat pengguna yang
+  * wajib hilang.
    */
   const tanpaProtokol = tanpaKunci.replace(/epresensi-bkdjatim/gi, 'cookie-sesi-hulu');
   return /e-?presensi/i.test(tanpaProtokol);

@@ -1,35 +1,15 @@
-/*
- * ⚠️ Uji lokasi DIHAPUS, digantikan pemeriksaan di bawah.
- *
- * Dulu modul ini menguji `lokasiTersimpan.ts`: namespace per-akun, kunci
- * lama yang dihapus, data rusak yang disaring. Semuanya tidak ada lagi —
- * aplikasi tidak memakai GPS maupun peta, jadi tidak ada titik yang disimpan
- * di peramban dan tidak ada lagi yang bisa "saling bersinggungan antar akun"
- * lewat titik absen.
- *
- * Yang menggantikannya bukan sekadar assertion yang hilang, tapi pemeriksaan
- * langsung bahwa tidak ada satu pun jejak lokasi yang tersisa.
- */
-
 /**
- * Uji Manajemen Akun + jaminan tidak ada lokasi/GPS.
+ * Uji Manajemen Akun + isolasi titik lokal per akun.
  *
  * Dua hal yang diuji di sini:
  *
  * 1. Menu Manajemen Akun. Satu menu, tiga tab, satu URL, admin saja.
- * 2. **Tidak adanya lokasi.** Dulu modul ini menguji `lokasiTersimpan.ts`:
- *    namespace per-akun, kunci lama yang dihapus, data rusak yang disaring.
- *    Semuanya tidak ada lagi — aplikasi tidak memakai GPS maupun peta, jadi
- *    tidak ada titik yang disimpan di peramban dan tidak ada lagi yang bisa
- *    "saling bersinggungan antar akun" lewat titik absen.
- *
- * Yang menggantikannya bukan sekadar assertion yang hilang, tapi pemeriksaan
- * langsung bahwa tidak ada satu pun jejak lokasi yang tersisa — termasuk
- * `navigator.geolocation`, yang dulu dipanggil saat login dan memicu dialog
- * izin lokasi di tengah proses absen.
+ * 2. Titik pilihan disimpan di IndexedDB lokal, tidak dibagikan antar akun
+ *    dan tidak memerlukan izin GPS perangkat.
  */
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { createIndexedDbMock } from './indexedDbMock.mts';
 
 const baca = (p: string): string => readFileSync(new URL(p, import.meta.url), 'utf8');
 const root = new URL('..', import.meta.url).pathname;
@@ -47,7 +27,7 @@ const cek = (nama: string, ok: unknown, detail = ''): void => {
 };
 
 // ═════════════════════════════════════════════════════════════════════
-console.log('\n=== 1. Tidak ada GPS, peta, atau titik absen di peramban');
+console.log('\n=== 1. Tidak ada GPS perangkat; titik disimpan lokal');
 // ═════════════════════════════════════════════════════════════════════
 /*
  * `navigator.geolocation` pernah dipanggil saat login — itu sumber dialog
@@ -158,8 +138,8 @@ console.log('\n=== 9. Titik absen tidak bocor antar akun');
 /*
  * Ini bagian yang paling mudah rusak dan paling sulit kelihatan.
  *
- * Dua akun yang bergantian di satu peramban berbagi `localStorage`. Kalau
- * kuncinya tidak memuat username, akun kedua diam-diam memakai titik milik
+ * Dua akun yang bergantian di satu perangkat berbagi IndexedDB. Kalau
+ * record-nya tidak memuat username, akun kedua diam-diam memakai titik milik
  * akun pertama — dan absennya tercatat pada koordinat orang lain.
  *
  * Diperiksa dua arah:
@@ -167,7 +147,7 @@ console.log('\n=== 9. Titik absen tidak bocor antar akun');
  * 1. Titik **selalu** dibaca dengan username. Panggilan tanpa argumen
  *    berarti "pakai titik siapa pun yang tersimpan" — itu tidak pernah
  *    benar, jadi di sini dilarang.
- * 2. Kunci storage dihitung dari username, dan dua username yang berbeda
+ * 2. Kunci record dihitung dari username, dan dua username yang berbeda
  *    tidak boleh menghasilkan kunci yang sama.
  */
 {
@@ -202,6 +182,7 @@ console.log('\n=== 9. Titik absen tidak bocor antar akun');
   // tertangkap `try/catch` yang diam-diam.
   globalThis.localStorage = storagePalsu;
   globalThis.window = { localStorage: storagePalsu } as unknown as Window & typeof globalThis;
+  Object.defineProperty(globalThis, 'indexedDB', { configurable: true, value: createIndexedDbMock() });
 
   const L = await import('../src/lib/lokasiTersimpan.ts');
 
@@ -209,41 +190,45 @@ console.log('\n=== 9. Titik absen tidak bocor antar akun');
   // yang dipakai ditandai. `tambahTitik` saja **tidak** menulis penunjuk
   // aktif — itu kehati-hatian yang benar: titik yang baru dibuat
   // belum otomatis jadi koordinat absen.
-  L.tambahTitik('budi', { nama: 'Kantor Pusat', latitude: -7.25, longitude: 112.75, dipakai: false });
-  L.tambahTitik('budi', { nama: 'Rumah', latitude: -7.3, longitude: 112.8, dipakai: false });
-  L.jadikanAktif('budi', { nama: 'Kantor Pusat', latitude: -7.25, longitude: 112.75, dipakai: true });
+  await L.tambahTitik('budi', { nama: 'Kantor Pusat', latitude: -7.25, longitude: 112.75, dipakai: false });
+  await L.tambahTitik('budi', { nama: 'Rumah', latitude: -7.3, longitude: 112.8, dipakai: false });
+  await L.jadikanAktif('budi', { nama: 'Kantor Pusat', latitude: -7.25, longitude: 112.75, dipakai: true });
 
-  cek('budi punya 2 titik', L.bacaTitik('budi').length === 2, `${L.bacaTitik('budi').length} titik`);
+  const titikBudi = await L.bacaTitik('budi');
+  const aktifBudi = await L.bacaTitikAktif('budi');
+  cek('budi punya 2 titik', titikBudi.length === 2, `${titikBudi.length} titik`);
   cek('jadikanAktif menulis penunjuk aktif untuk titik BARU',
-    L.bacaTitikAktif('budi')?.nama === 'Kantor Pusat',
+    aktifBudi?.nama === 'Kantor Pusat',
     'kalau penunjuk tidak ditulis, last_latlong kosong dan absen selalu terkunci');
-  cek('sari tidak mewarisi titik budi', L.bacaTitik('sari').length === 0,
+  cek('sari tidak mewarisi titik budi', (await L.bacaTitik('sari')).length === 0,
     'titik ikut akun, bukan milik peramban');
-  cek('rudi tidak mewarisi titik budi', L.bacaTitik('rudi').length === 0);
+  cek('rudi tidak mewarisi titik budi', (await L.bacaTitik('rudi')).length === 0);
   cek('kunci budi !== kunci sari', L.kunciTitik('budi') !== L.kunciTitik('sari'));
   cek('username dengan / tidak menabrak yang lain', L.kunciTitik('a/b') !== L.kunciTitik('ab'));
   cek('username kosong -> kunci cadangan, bukan crash', typeof L.kunciTitik('') === 'string');
+  cek('titik baru tidak ditulis ke localStorage', store.size === 0);
 
   // `jadikanAktif` menerima objek titik (bukan id).
-  L.jadikanAktif('sari', { nama: 'Kantor Sari', latitude: -7.4, longitude: 112.9, dipakai: true });
+  await L.jadikanAktif('sari', { nama: 'Kantor Sari', latitude: -7.4, longitude: 112.9, dipakai: true });
+  const aktifSari = await L.bacaTitikAktif('sari');
   cek('titik aktif terpisah per akun',
-    L.bacaTitikAktif('budi')?.nama === 'Kantor Pusat' && L.bacaTitikAktif('sari')?.nama === 'Kantor Sari',
+    aktifBudi?.nama === 'Kantor Pusat' && aktifSari?.nama === 'Kantor Sari',
     'kalau sari ikut memakai titik budi, absennya tercatat pada titik orang lain');
   cek('hanya satu titik aktif per akun',
-    L.bacaTitik('budi').filter(t => t.dipakai).length === 1 &&
-    L.bacaTitik('sari').filter(t => t.dipakai).length === 1,
+    (await L.bacaTitik('budi')).filter(t => t.dipakai).length === 1 &&
+    (await L.bacaTitik('sari')).filter(t => t.dipakai).length === 1,
     'dua titik aktif = tidak jelas mana yang dipakai server');
 
   // Ringkasan untuk admin — dibaca SEBELUM storage dirusak di bawah.
-  const ring = L.ringkasanTitik('budi');
+  const ring = await L.ringkasanTitik('budi');
   cek('ringkasan punya 2 titik', ring.length === 2, String(ring.length));
   cek('ringkasan menandai yang dipakai', ring.filter(t => t.dipakai).length === 1);
   cek('ringkasan tidak membocorkan id internal', ring.every(t => !('id' in t)));
   cek('ringkasan tidak membocorkan createdAt', ring.every(t => !('dibuatPada' in t)));
-  cek('ringkasan akun kosong = []', L.ringkasanTitik('rudi').length === 0);
+  cek('ringkasan akun kosong = []', (await L.ringkasanTitik('rudi')).length === 0);
 
   // Titik rusak harus disaring, bukan membuat crash.
-  store.clear();
+  await L.bersihkanSemua('budi');
   store.set(L.kunciTitik('budi'), JSON.stringify([
     { id: 'ok', nama: 'Bagus', latitude: -7.2, longitude: 112.7, dipakai: true, dibuatPada: 1 },
     { id: 'tanpa-koordinat', nama: 'Rusak' },
@@ -252,16 +237,17 @@ console.log('\n=== 9. Titik absen tidak bocor antar akun');
     'bukan objek',
     { id: 'di luar bumi', nama: 'Antarctica', latitude: 999, longitude: 999 },
   ]));
-  const tersaring = L.bacaTitik('budi');
+  const tersaring = await L.bacaTitik('budi');
   cek('entri valid tetap ada', tersaring.some(t => t.nama === 'Bagus'));
   cek('tanpa koordinat dibuang', !tersaring.some(t => t.nama === 'Rusak'));
   cek('NaN dibuang', !tersaring.some(t => t.nama === 'NaN'));
   cek('koordinat di luar bumi dibuang', !tersaring.some(t => t.nama === 'Antarctica'));
   cek('hanya 1 yang tersisa', tersaring.length === 1, `${tersaring.length} entri`);
 
-  store.set(L.kunciTitik('budi'), 'bukan json {{{');
-  cek('JSON rusak tidak melempar', Array.isArray(L.bacaTitik('budi')));
-  cek('JSON rusak -> daftar kosong', L.bacaTitik('budi').length === 0);
+  store.set(L.kunciTitik('json-rusak'), 'bukan json {{{');
+  const jsonRusak = await L.bacaTitik('json-rusak');
+  cek('JSON rusak tidak melempar', Array.isArray(jsonRusak));
+  cek('JSON rusak -> daftar kosong', jsonRusak.length === 0);
 }
 
 console.log('\n=== 10. Satu halaman Manajemen Akun terpadu');
@@ -274,10 +260,8 @@ cek('menu terdaftar dengan id tabManajemenAkun', /id: 'tabManajemenAkun'/.test(a
 cek('label menu "Manajemen Akun"', /label: 'Manajemen Akun'/.test(appSrc));
 cek('halaman dimuat lewat lazy', /tabManajemenAkun: \(\) => import\('\.\/pages\/ManajemenAkun'\)/.test(appSrc));
 cek('grup "Administrasi" terpisah dari Menu Utama', /admin: 'Administrasi'/.test(appSrc));
-// Referensi (Dokumentasi) paling akhir, di bawah Administrasi: Dokumentasi
-// adalah bacaan, bukan alat admin.
-cek('urutan grup: utama, admin, referensi', /GROUP_ORDER: PageDefinition\['group'\]\[\] = \['utama', 'admin', 'referensi'\]/.test(appSrc));
-cek('Dokumentasi ada di grup Referensi', /id: 'tabDocs'[\s\S]{0,120}group: 'referensi'/.test(appSrc));
+cek('urutan grup: utama lalu administrasi', /GROUP_ORDER: PageDefinition\['group'\]\[\] = \['utama', 'admin'\]/.test(appSrc));
+cek('halaman dokumentasi tidak terdaftar sebagai menu', !/id: 'tabDocs'/.test(appSrc));
 cek('Administrasi memuat Manajemen Akun', /id: 'tabManajemenAkun'[\s\S]{0,200}group: 'admin'/.test(appSrc));
 cek('Dokumentasi tidak ikut di grup Admin', !/id: 'tabDocs'[\s\S]{0,120}group: 'admin'/.test(appSrc));
 // `?.` dipakai karena `currentUser` dijamin ada oleh filter luar
@@ -287,6 +271,8 @@ cek(
   'menu hanya untuk admin',
   /page\.id === 'tabManajemenAkun'\) return currentUser\??\.role === 'admin'/.test(appSrc)
 );
+cek('Manajemen Akun tidak membaca atau menampilkan lokasi absensi',
+  !/Lokasi Absen|ringkasanTitik|titikAktif|jumlahTitik/.test(akunSrc));
 cek(
   'sidebar kosong selama sesi belum diverifikasi',
   /cekingSesi \|\| !currentUser \? \[\] : PAGES/.test(appSrc),

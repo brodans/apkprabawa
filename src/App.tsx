@@ -814,7 +814,7 @@ class PageErrorBoundary extends React.Component<
  * Nama depan saja untuk kartu akun di top bar.
  *
  * Nama lengkap beserta NIP, jabatan, dan unit kerja sudah tampil di halaman Beranda
- * dan Dokumentasi — di sini cukup yang mudah dikenali.
+ * — di sini cukup yang mudah dikenali.
  */
 function namaDepan(nama: string | undefined): string {
   return (nama ?? '').trim().split(/\s+/)[0] ?? '';
@@ -1144,7 +1144,7 @@ function MainApp({ onLogout, isDarkMode, toggleDarkMode }: { onLogout: () => voi
   const isExpanded = isSidebarExpanded || isMobileMenuOpen;
 
   return (
-    <div className="bg-slate-50 dark:bg-[#0B1120] text-slate-800 dark:text-slate-200 font-sans h-[100svh] w-full flex transition-colors duration-300 overflow-hidden relative">
+    <div className="poni-workspace bg-slate-50 dark:bg-[#0B1120] text-slate-800 dark:text-slate-200 font-sans h-[100svh] w-full flex transition-colors duration-300 overflow-hidden relative">
       {/* ─── Sidebar ─────────────────────────────────────────────────── */}
       <aside
         className={`poni-sidebar bg-[#0F172A] dark:bg-[#070B14] border-r border-slate-800/50 flex flex-col h-full fixed inset-y-0 left-0 lg:relative lg:inset-y-auto lg:left-auto lg:flex transition-all duration-300 ease-in-out z-40 shadow-2xl lg:shadow-none ${

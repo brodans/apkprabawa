@@ -33,6 +33,53 @@ function epTargetOrigin() {
   return EP_TARGET_BAWAAN;
 }
 
+// src/serverless/_cors.ts
+var HOST_LOKAL = /^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/;
+function lengkapiSkema(origin) {
+  if (origin === "tauri://localhost" || origin === "http://tauri.localhost" || origin === "https://tauri.localhost" || origin === "http://localhost") return origin;
+  if (origin.includes("://")) return origin;
+  if (origin === "*") return origin;
+  const denganPort = /^[^/:]+:\d+$/.test(origin);
+  if (HOST_LOKAL.test(origin) || denganPort && HOST_LOKAL.test(origin.split(":")[0])) {
+    return `http://${origin}`;
+  }
+  return `https://${origin}`;
+}
+function daftarOrigin() {
+  return (process.env.ALLOWED_ORIGINS || "").split(",").map((item) => item.trim()).filter(Boolean).map(lengkapiSkema);
+}
+function originMilikSendiri() {
+  const asal = [];
+  for (const nama of ["VERCEL_URL", "VERCEL_BRANCH_URL"]) {
+    const nilai = process.env[nama];
+    if (!nilai) continue;
+    asal.push(lengkapiSkema(String(nilai).trim()));
+  }
+  return asal;
+}
+function asalDiizinkan(origin) {
+  if (!origin) return true;
+  const asal = origin.trim().toLowerCase();
+  if (asal === "tauri://localhost" || asal === "http://tauri.localhost" || asal === "https://tauri.localhost" || asal === "http://localhost" || asal === "https://localhost") return true;
+  const cari = lengkapiSkema(origin.trim()).toLowerCase();
+  if (originMilikSendiri().some((item) => item.toLowerCase() === cari)) return true;
+  const daftar = daftarOrigin();
+  if (daftar.includes("*")) return true;
+  return daftar.some((item) => item.toLowerCase() === cari);
+}
+function terapkanCors(res, origin) {
+  res.setHeader("Vary", "Origin");
+  res.setHeader("Access-Control-Allow-Methods", "POST, GET, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Accept, Authorization");
+  const originLower = origin?.trim().toLowerCase() ?? "";
+  const isTauriOrigin = originLower === "tauri://localhost" || originLower === "http://tauri.localhost" || originLower === "https://tauri.localhost" || originLower === "http://localhost" || originLower === "https://localhost";
+  if (!isTauriOrigin && !asalDiizinkan(origin)) {
+    return false;
+  }
+  res.setHeader("Access-Control-Allow-Origin", origin || "*");
+  return true;
+}
+
 // src/serverless/ep.ts
 var TARGET = epTargetOrigin();
 var TARGET_ORIGIN = new URL(TARGET).origin;
@@ -101,10 +148,14 @@ function rewriteSetCookie(cookies, origin) {
 }
 async function handler(req, res) {
   const origin = typeof req.headers.origin === "string" ? req.headers.origin : "";
+  if (!terapkanCors(res, origin || void 0)) {
+    res.statusCode = 403;
+    res.setHeader("Content-Type", "text/plain; charset=utf-8");
+    res.end("Origin tidak diizinkan.");
+    return;
+  }
   if (origin) {
-    res.setHeader("Access-Control-Allow-Origin", origin);
     res.setHeader("Access-Control-Allow-Credentials", "true");
-    res.setHeader("Vary", "Origin");
   }
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS,HEAD");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, Accept");

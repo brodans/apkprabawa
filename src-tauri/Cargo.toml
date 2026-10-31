@@ -19,3 +19,9 @@ tauri-plugin-shell = "2"
 [features]
 custom-protocol = ["tauri/custom-protocol"]
 default = ["custom-protocol"]
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+strip = "symbols"

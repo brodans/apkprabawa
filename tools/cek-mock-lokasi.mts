@@ -26,6 +26,7 @@
  *    Karena itu setter titik wajib memanggil `segarkanTitik()`.
  */
 import { readFileSync } from 'node:fs';
+import { createIndexedDbMock } from './indexedDbMock.mts';
 
 const root = new URL('..', import.meta.url).pathname;
 const baca = (p: string): string => readFileSync(`${root}${p}`, 'utf8');
@@ -88,9 +89,9 @@ console.log('\n=== 1. Titik pilihan dikirim sebagai lokasi nyata (bukan mock)');
   const paramKeProxy = (): Record<string, unknown> => tether.proxy?.param ?? {};
   const paramKeGateway = (): Record<string, unknown> => tether.gateway?.param ?? {};
 
-  globalThis.fetch = (async (u: URL | RequestInfo, o?: RequestInit) => {
+  globalThis.fetch = (async (_u: URL | RequestInfo, o?: RequestInit) => {
     const body = JSON.parse(String(o?.body ?? '{}')) as Badan;
-    if (String(u).startsWith('/')) tether.proxy = body;
+    if (tether.proxy === null) tether.proxy = body;
     else tether.gateway = body;
     return new Response(
       JSON.stringify({ jsonrpc: 2, id_req: 'X', result: { absen: true, message: 'ok' } }),
@@ -227,28 +228,34 @@ console.log('\n=== 5. Titik lokal ikut username setelah akun di-rename');
   };
   globalThis.localStorage = lokasiStorage;
   globalThis.window = { localStorage: lokasiStorage } as unknown as Window & typeof globalThis;
-  const { migrasiTitikUsernameLokal } = await import('../src/lib/lokasiTersimpan.ts');
+
+  Object.defineProperty(globalThis, 'indexedDB', { configurable: true, value: createIndexedDbMock() });
+
+  const { migrasiTitikUsernameLokal, bacaTitik, bacaTitikAktif } = await import('../src/lib/lokasiTersimpan.ts');
   const lama = 'epresensi_jatim_lokasi__nama-lama';
   const lamaAktif = 'epresensi_jatim_lokasi_aktif__nama-lama';
-  const baru = 'epresensi_jatim_lokasi__nama-baru';
-  const baruAktif = 'epresensi_jatim_lokasi_aktif__nama-baru';
   const dataTitik = JSON.stringify([
     { id: 'kantor', nama: 'Kantor', latitude: -7.2, longitude: 112.7, dipakai: true, dibuatPada: 1 },
   ]);
   lokasiStore.set(lama, dataTitik);
   lokasiStore.set(lamaAktif, 'kantor');
-  migrasiTitikUsernameLokal('nama-baru', ['nama-lama']);
-  cek('daftar titik disalin ke username baru', lokasiStore.get(baru) === dataTitik);
-  cek('titik aktif ikut dipindahkan', lokasiStore.get(baruAktif) === 'kantor');
+  await migrasiTitikUsernameLokal('nama-baru', ['nama-lama']);
+  const titikBaru = await bacaTitik('nama-baru');
+  const aktifBaru = await bacaTitikAktif('nama-baru');
+  cek('daftar titik disalin ke IndexedDB username baru', titikBaru.length === 1 && titikBaru[0].id === 'kantor');
+  cek('titik aktif ikut dipindahkan', aktifBaru?.id === 'kantor');
   cek('kunci lokal username lama dibersihkan setelah tersalin',
     !lokasiStore.has(lama) && !lokasiStore.has(lamaAktif));
 
-  lokasiStore.set(lama, dataTitik);
-  lokasiStore.set(baru, 'daftar-yang-sudah-ada');
-  migrasiTitikUsernameLokal('nama-baru', ['nama-lama']);
+  const lamaLain = 'epresensi_jatim_lokasi__nama-lama-lain';
+  const baruLain = 'epresensi_jatim_lokasi__nama-baru-lain';
+  const dataLamaLain = dataTitik.replace('kantor', 'kantor-lama');
+  const dataTujuanLain = dataTitik.replace('kantor', 'kantor-tujuan');
+  lokasiStore.set(lamaLain, dataLamaLain);
+  lokasiStore.set(baruLain, dataTujuanLain);
+  await migrasiTitikUsernameLokal('nama-baru-lain', ['nama-lama-lain']);
   cek('data sumber dipertahankan bila kunci tujuan sudah ada',
-    lokasiStore.get(lama) === dataTitik);
-  lokasiStore.delete(baru);
+    lokasiStore.get(lamaLain) === dataLamaLain);
 }
 
 console.log(fail === 0 ? '\nSEMUA LULUS' : `\n${fail} KEGAGALAN`);

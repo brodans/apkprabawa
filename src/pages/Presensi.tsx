@@ -134,9 +134,20 @@ export default function Presensi() {
   } | null>(null);
 
   useEffect(() => {
-    setTitikSaya(bacaTitik(username));
+    let aktif = true;
+    setTitikSaya([]);
     setKoordinatSementara(null);
     setDrafPeta(null);
+    void bacaTitik(username)
+      .then(titik => {
+        if (aktif) setTitikSaya(titik);
+      })
+      .catch(() => {
+        if (aktif) toast.error('Gagal membaca titik dari penyimpanan perangkat.');
+      });
+    return () => {
+      aktif = false;
+    };
   }, [username]);
 
   // ── Konfirmasi absensi ──────────────────────────────────────────
@@ -454,16 +465,16 @@ export default function Presensi() {
                     <Dropdown
                       value={titikPakai?.id ?? ''}
                       onChange={value => {
-                        setTitikAktif(username, value);
-                        setKoordinatSementara(null);
-                        setTitikSaya(prev =>
-                          prev.map(item => ({ ...item, dipakai: item.id === value }))
-                        );
-                        // `context.lastLatLong` ikut segar sekarang juga, bukan
-                        // menunggu polling 5 detik — kalau tidak, klik "Absen"
-                        // sesaat setelah ini mengirim koordinat lama.
-                        segarkanTitik();
-                        setDialogAbsenOpen(false);
+                        void setTitikAktif(username, value)
+                          .then(() => {
+                            setKoordinatSementara(null);
+                            setTitikSaya(prev =>
+                              prev.map(item => ({ ...item, dipakai: item.id === value }))
+                            );
+                            segarkanTitik();
+                            setDialogAbsenOpen(false);
+                          })
+                          .catch(() => toast.error('Titik gagal diaktifkan.'));
                       }}
                       opsi={
                         titikSaya.length === 0

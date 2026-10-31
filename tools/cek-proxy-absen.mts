@@ -353,6 +353,7 @@ console.log('\n=== ep: content-length basi tidak boleh mematikan POST');
 
   // `epTargetOrigin()` membaca env saat dipanggil, jadi set sebelum import.
   process.env.EP_TARGET_ORIGIN = `http://127.0.0.1:${portEp}`;
+  process.env.ALLOWED_ORIGINS = 'https://app.example.go.id';
   const { default: handlerEp } = await import('../src/serverless/ep.ts');
 
   const asli = 'm_user[email]=198501012015011001&m_user[password]=rahasia123&m_user[CAPTCHA]=2636';
@@ -360,6 +361,7 @@ console.log('\n=== ep: content-length basi tidak boleh mematikan POST');
     url: '/p/login',
     method: 'POST',
     headers: {
+      origin: 'https://app.example.go.id',
       'x-matched-path': '/ep/p/login',
       'content-type': 'application/x-www-form-urlencoded',
       // Sengaja basi: milik body asli, sedangkan body akan dibangun ulang.
@@ -388,10 +390,29 @@ console.log('\n=== ep: content-length basi tidak boleh mematikan POST');
     end(b?: string) { statusEp = this.statusCode; if (b) badirEp = b; },
   };
 
+  const resOriginAsing = {
+    statusCode: 200,
+    h: {} as Record<string, string>,
+    setHeader(k: string, v: string) { this.h[k.toLowerCase()] = v; },
+    end() {},
+  };
+  await handlerEp({
+    ...reqEp,
+    headers: { ...reqEp.headers, origin: 'https://asing.example' },
+  } as never, resOriginAsing as never);
+  cek('origin asing ditolak sebelum menyentuh upstream',
+    resOriginAsing.statusCode === 403 && AskEp.length === 0,
+    `status=${resOriginAsing.statusCode}, request=${AskEp.length}`);
+  cek('origin asing tidak menerima header credentials',
+    !resOriginAsing.h['access-control-allow-origin'] && !resOriginAsing.h['access-control-allow-credentials']);
+
   await handlerEp(reqEp as never, resEp as never);
 
   cek('POST login tidak jadi 502 fetch failed', statusEp !== 502 && !/fetch failed/.test(badirEp),
     `status=${statusEp} body=${badirEp.slice(0, 80)}`);
+  cek('origin allow-list menerima credentials untuk cookie sesi',
+    resEp.h['access-control-allow-origin'] === 'https://app.example.go.id' &&
+      resEp.h['access-control-allow-credentials'] === 'true');
   cek('request benar-benar sampai ke upstream', AskEp.length === 1,
     `jumlah=${AskEp.length} — body tidak terkirim sama sekali`);
 
@@ -492,7 +513,8 @@ console.log('\n=== web login: respons HTTP gagal tidak boleh dianggap berhasil')
     } catch (err) {
       pesanLogin = err instanceof Error ? err.message : String(err);
     }
-    cek('form login dikirim ke endpoint proxy web', urlLogin === '/ep/p/login', urlLogin);
+    cek('form login dikirim ke endpoint proxy web',
+      new URL(urlLogin, 'https://uji.invalid').pathname === '/ep/p/login', urlLogin);
     cek('NIP, password, dan captcha dikirim pada field yang benar',
       paramsLogin.get('m_user[email]') === '198501012015011001' &&
         paramsLogin.get('m_user[password]') === 'sandiuji' &&

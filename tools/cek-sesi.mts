@@ -71,7 +71,9 @@ function buatStorage(): StorageUji {
   };
 }
 const sessionStorageUji = buatStorage();
-const localStorageUji = buatStorage();
+// sessionManager memakai localStorage agar sesi bertahan di Tauri; kedua nama
+// menunjuk store uji yang sama supaya assertion membaca data produksi.
+const localStorageUji = sessionStorageUji;
 globalThis.sessionStorage = sessionStorageUji;
 globalThis.localStorage = localStorageUji;
 globalThis.window = {
@@ -462,7 +464,7 @@ cek('loadSession tidak lagi memakai loop "kembalikan yang pertama"',
 cek('ada penunjuk akun aktif', src.includes('epresensi_jatim_sesi_aktif'));
 cek('penunjuk dibaca loadSession', /const aktif = akunAktif\(\)/.test(src));
 cek('saveSession membuang SEMUA sesi lain, bukan hanya beda peran',
-  /for \(const key of semuaKunciSesi\(\)\) \{\s*if \(key !== kunci\) sessionStorage\.removeItem\(key\);/.test(src),
+  /for \(const key of semuaKunciSesi\(\)\) \{\s*if \(key !== kunci\) storageSesi\(\)\.removeItem\(key\);/.test(src),
   'sisa sesi di storage = kredensial yang tidak perlu ada dan bisa terbaca lagi');
 cek('saveSession TIDAK hanya membuang beda peran (itu aturan lama)',
   !/boundRole !== user\.role/.test(src));

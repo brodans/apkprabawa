@@ -18,7 +18,6 @@ import {
 import { useAppContext } from '../context/AppContext';
 import { useToast } from '../components/ui/Toast';
 import { AksiMenu } from '../components/ui/AksiMenu';
-import { ringkasanTitik, type RingkasanTitik } from '../lib/lokasiTersimpan';
 import {
   ActionButton,
   Alert,
@@ -90,10 +89,6 @@ interface BarisAkun {
   totalBayar: number;
   jumlahBayar: number;
   ringkasan: RingkasanLangganan;
-  /** Jumlah titik absen yang tersimpan di peramban akun ini. */
-  jumlahTitik: number;
-  /** Titik yang ditandai dipakai — ini koordinat yang dikirim saat absen. */
-  titikAktif: RingkasanTitik | null;
   /** Metadata kredensial server — tanpa passwordnya. */
   kredensial: RingkasanKredensial | null;
 }
@@ -131,18 +126,6 @@ function invalidasiCacheManajemen(): void {
 /**
  * Menu Manajemen Akun terpadu untuk daftar akun dan seluruh pengelolaan
  * langganan, pembayaran, metode, serta paket.
- *
- * ## Kolom Lokasi
- *
- * ⚠️ Titik absen disimpan **di peramban tiap pengguna**, jadi admin tidak bisa
- * membacanya dari Firestore — `ringkasanTitik()` hanya membaca `localStorage`
- * peramban yang sedang berjalan. Yang tampil di kolom "Lokasi" adalah jumlah
- * titik yang terlihat, dan itu jujur: 0 berarti akun ini belum pernah membuat
- * titik, **atau** memakai peramban/device lain.
- *
- * Admin tidak boleh disodorkan angka yang terlihat pasti tapi sebenarnya
- * tidak diketahui. Itu alasan kolom ini berbatas, bukan alasan untuk
- * menyembunyikannya.
  */
 export default function ManajemenAkun() {
   const { currentUser } = useAppContext();
@@ -444,11 +427,6 @@ function KelolaAkun({ toast }: {
       .map(item => {
         const doc = langgananMap.get(item.username) ?? null;
         const ring = ringkasanLangganan(item.username, doc, paket, item.role);
-        // Titik absen dibaca dari storage peramban **yang sedang berjalan**,
-        // jadi untuk akun lain nilainya pasti kosong. Itu jujur: kolom ini
-        // tidak boleh menampilkan angka yang terlihat pasti tapi sebenarnya
-        // tidak diketahui.
-        const titik = ringkasanTitik(item.username);
         return {
           akun: item,
           status: ring.status,
@@ -458,8 +436,6 @@ function KelolaAkun({ toast }: {
           totalBayar: ring.totalBayar,
           jumlahBayar: ring.jumlahBayar,
           ringkasan: ring,
-          jumlahTitik: titik.length,
-          titikAktif: titik.find(t => t.dipakai) ?? null,
           kredensial: kredensialMap.get(item.username) ?? null,
         } satisfies BarisAkun;
       })
@@ -656,37 +632,6 @@ function KelolaAkun({ toast }: {
           </div>
         );
       },
-    },
-    {
-      key: 'lokasi',
-      header: 'Lokasi Absen',
-      // Sama seperti kolom "Akun": nama titik absen ber-`truncate` perlu plafon.
-      className: 'w-[150px] max-w-[150px]',
-      render: row => (
-        <div className="min-w-0 text-[11px] leading-tight">
-          {row.titikAktif ? (
-            <>
-              <p className="text-slate-700 dark:text-slate-200 font-semibold truncate">
-                {row.titikAktif.nama}
-              </p>
-              <p className="font-mono text-slate-400 dark:text-slate-500">
-                {row.titikAktif.latitude.toFixed(5)}, {row.titikAktif.longitude.toFixed(5)}
-              </p>
-            </>
-          ) : (
-            <>
-              <p className="text-slate-400 dark:text-slate-500">
-                {row.jumlahTitik > 0 ? `${row.jumlahTitik} titik, belum ada yang dipakai` : 'Belum ada'}
-              </p>
-              {row.jumlahTitik === 0 && (
-                <p className="text-slate-300 dark:text-slate-600 text-[10px]">
-                  device ini atau belum pernah membuat
-                </p>
-              )}
-            </>
-          )}
-        </div>
-      ),
     },
     {
       /* Masa aktif dan total bayar melengkapi status langganan pada baris ini. */

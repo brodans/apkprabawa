@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { bacaTitikAktif, type TitikAbsen } from '../lib/lokasiTersimpan';
 import { formatLatLong } from '../lib/presensiContract';
@@ -16,12 +16,9 @@ import type { ServerContext } from '../lib/apiCalls';
  *
  * ## Titik ikut CurrentUser
  *
- * ⚠️ Titik absen dibaca per-akun (`bacaTitikAktif(username)`), bukan dari
- * satu kunci bersama. Kalau username ikut berubah, state **dikosongkan**
- * sekalian pada frame yang sama — bukan menunggu efek berjalan. Kalau tidak,
- * `useState(() => bacaTitikAktif())` masih memegang titik akun sebelumnya
- * sampai polling 5 detik selesai, dan satu request absen sempat terkirim
- * dengan koordinat orang lain.
+ * Titik absen dibaca async dari IndexedDB dengan key akun. State memuat
+ * username bersama titiknya sehingga perubahan akun langsung menghasilkan
+ * `null` pada render, tanpa menunggu pembacaan database selesai.
  */
 /**
  * Apakah dua titik absen menghasilkan state yang sama.
@@ -49,10 +46,15 @@ export function useServerContext() {
   // Titik absen aktif dibaca ulang tiap 5 detik + tiap halaman difokuskan,
   // supaya perubahan di Lokasi Absen langsung terpakai di panggilan
   // berikutnya tanpa perlu memuat ulang.
-  const [titik, setTitik] = useState<TitikAbsen | null>(() => bacaTitikAktif(username));
+  const [titikState, setTitikState] = useState<{ username: string; titik: TitikAbsen | null }>({
+    username,
+    titik: null,
+  });
+  const nomorBaca = useRef(0);
+  const titik = titikState.username === username ? titikState.titik : null;
 
   /**
-   * Baca ulang titik aktif **sekarang juga**, tanpa menunggu polling.
+  * Baca ulang titik aktif **sekarang juga**, tanpa menunggu polling.
    *
    * ⚠️ Ada polling 5 detik supaya perubahan dari halaman Lokasi Absen
    * terpakai di panggilan berikutnya tanpa perlu memuat ulang. Tapi polling
@@ -66,12 +68,11 @@ export function useServerContext() {
    * Dipanggil juga oleh halaman Presensi setiap kali titik berubah di sana,
    * jadi `context` ikut terbarui pada frame yang sama.
    *
-   * ## Kenapa hasilnya dibandingkan sebelum `setTitik`
+  * ## Kenapa hasilnya dibandingkan sebelum menyimpan state
    *
-   * `bacaTitikAktif()` menyusun ulang objek dari JSON setiap dipanggil —
-   * `bacaTitik()` memetakan dan menyalin tiap entri. Jadi dua pemanggilan
-   * berturut-turut mengembalikan objek yang **identik isinya** tapi berbeda
-   * identitasnya, dan `setState` membandingkan dengan `Object.is`.
+  * `bacaTitikAktif()` membaca record IndexedDB dan membentuk objek baru.
+  * Dua pembacaan berturut-turut bisa menghasilkan objek yang identik isinya
+  * tetapi berbeda identitasnya, dan `setState` membandingkan dengan `Object.is`.
    *
    * Tanpa perbandingan, polling 5 detik membuat state "berubah" terus —
    * komponen merender ulang, `context` dihitung ulang, dan `loadData` yang
@@ -79,14 +80,23 @@ export function useServerContext() {
    * titik, itu 12 render sia-sia per menit di halaman yang isinya tabel
    * presensi.
    */
-  const segarkanTitik = useCallback(() => {
-    const baru = bacaTitikAktif(username);
-    setTitik(lama => (titikSama(lama, baru) ? lama : baru));
+  const segarkanTitik = useCallback(async () => {
+    const nomor = ++nomorBaca.current;
+    try {
+      const baru = await bacaTitikAktif(username);
+      if (nomor !== nomorBaca.current) return;
+      setTitikState(lama => {
+        const titikLama = lama.username === username ? lama.titik : null;
+        if (titikSama(titikLama, baru) && lama.username === username) return lama;
+        return { username, titik: baru };
+      });
+    } catch {
+      if (nomor === nomorBaca.current) setTitikState({ username, titik: null });
+    }
   }, [username]);
 
-  // Ganti akun → titik ikut akun lama harus langsung hilang, bukan satu
-  // polling lagi. `setTitik(null)` ada di branch yang sama dengan
-  // penggantian username supaya tidak ada render antara keduanya.
+  // Ganti akun → titik lama langsung tersembunyi lewat pemeriksaan username
+  // pada render, lalu pembacaan IndexedDB memuat titik akun baru.
   useEffect(() => {
     segarkanTitik();
   }, [segarkanTitik]);

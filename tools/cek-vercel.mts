@@ -1117,33 +1117,8 @@ cek('_panel.ts tidak mendefinisikan allow-list sendiri lagi',
   !/function terapkanCorsPanel/.test(tanpaKomentar(panelSrc)) &&
     !/ALLOWED_ORIGINS\?\.includes/.test(tanpaKomentar(panelSrc)),
   'dua allow-list = dua tempat yang harus diubah, dan keduanya akan menyimpang');
-/*
- * Pengecualian yang disengaja: `ep.ts` (proxy `/ep/*`) TIDAK memakai
- * `terapkanCors`, dan itu benar — bukan kelalaian.
- *
- * Dua alasan yang tidak bisa dibantah dengan CORS:
- *
- * 1. **CORS tidak menghentikan pemanggil non-peramban.** `curl` dan skrip
- *    server mengabaikan header CORS sepenuhnya. Jadi allow-list origin tidak
- *    menambah perlindungan apa pun terhadap penyalahgunaan yang jadi alasan
- *    handler lain dibungkus CORS.
- * 2. **Menambahkannya justru melemahkan.** Respons `/ep/*` membawa cookie
- *    sesi server e-Presensi. Dengan `Access-Control-Allow-Origin` yang longgar,
- *    situs mana pun di allow-list bisa membaca respons itu lintas origin.
- *    Tanpa header tersebut, peramban memblokir pembacaan lintas origin — dan
- *    aplikasi sendiri tidak pernah butuh itu karena selalu same-origin
- *    (`src/lib/webPresensi.ts` memakai path `/ep`).
- *
- * Yang dijaga di sini justru arah sebaliknya: `ep.ts` tidak boleh diam-diam
- * mulai mengirim header CORS.
- */
-const TANPA_CORS_SENGJAJA = ['ep'];
-const isiPengecualian = TANPA_CORS_SENGJAJA.map(nama => bacaSrc(`src/serverless/${nama}.ts`));
-const handlerEp = isiPengecualian[0];
 cek('semua handler serverless memakai terapkanCors dari _cors',
   srcServerless
-    // `ep.ts` dikecualikan — alasannya di komentar di atas.
-    .filter(isi => !isiPengecualian.includes(isi))
     .every(isi => {
       const kode = tanpaKomentar(isi);
       if (/function terapkanCorsPanel/.test(kode)) return false;
@@ -1152,16 +1127,16 @@ cek('semua handler serverless memakai terapkanCors dari _cors',
       // menyentuh allow-list.
       if (/tanganiPanelAuth/.test(kode)) return /import \{ tanganiPanelAuth \} from '\.\/_panel'/.test(kode);
       return /terapkanCors\(/.test(kode);
-    }) &&
-    // …dan pengecualian itu tidak boleh diam-diam jadi tidak berlaku.
-    isiPengecualian.every(isi => !/Access-Control-Allow-Origin|terapkanCors/.test(tanpaKomentar(isi))),
+    }),
   'handler tanpa allow-list origin bisa dipanggil siapa saja yang tahu URL-nya');
-cek('ep.ts tetap tanpa header CORS (satu-satunya yang boleh begitu)',
-  !/Access-Control-Allow-Origin|terapkanCors/.test(tanpaKomentar(handlerEp)) &&
-    !srcServerless.some(isi =>
-      /Access-Control-Allow-Origin/.test(tanpaKomentar(isi)) &&
-      !/terapkanCors\(/.test(tanpaKomentar(isi))),
-  'menambahkannya membuat cookie sesi e-Presensi bisa dibaca lintas origin');
+const epKode = tanpaKomentar(bacaSrc('src/serverless/ep.ts'));
+cek('ep.ts menolak origin asing sebelum meneruskan request',
+  /import \{ terapkanCors \} from '\.\/_cors'/.test(epKode) &&
+    /if \(!terapkanCors\(res, origin \|\| undefined\)\)[\s\S]{0,220}statusCode = 403[\s\S]{0,180}return/.test(epKode));
+cek('ep.ts hanya mengizinkan credentials setelah pemeriksaan origin',
+  /if \(origin\)\s*\{\s*res\.setHeader\('Access-Control-Allow-Credentials', 'true'\);/.test(epKode));
+cek('handler tidak memantulkan Origin mentah',
+  srcServerless.every(isi => !/setHeader\(['"]Access-Control-Allow-Origin['"],\s*origin\)/.test(tanpaKomentar(isi))));
 
 /*
  * `POST /api/upload` meneruskan byte mentah, bukan FormData.

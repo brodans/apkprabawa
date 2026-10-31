@@ -70,6 +70,10 @@ cek('scroll vertikal halaman hanya berada pada kontainer konten',
 cek('padding halaman tidak mendorong scrollbar dari tepi viewport',
   /padding-left:\s*max\(1rem, var\(--poni-kiri\)\)/.test(cssSrc) &&
     /padding-right:\s*max\(1rem, var\(--poni-kanan\)\)/.test(cssSrc));
+cek('workspace Android berhenti di atas navbar dan padding tidak dobel',
+  appSrc.includes('poni-workspace bg-slate-50') &&
+    /body\.is-native \.poni-workspace\s*\{[^}]*height:\s*calc\(100dvh - var\(--poni-bawah, var\(--sab\)\)\)/.test(cssSrc) &&
+    /body\.is-native \.poni-workspace \.poni-konten\s*\{\s*padding-bottom:\s*1\.25rem !important/.test(cssSrc));
 cek('satu aturan global scrollbar, tanpa deklarasi yang saling menimpa',
   (cssSrc.match(/\*::-webkit-scrollbar\s*\{/g) ?? []).length === 1 &&
     (cssSrc.match(/^\s*::-webkit-scrollbar\s*\{/gm) ?? []).length === 0);
@@ -115,26 +119,8 @@ cek('peta Lokasi Absen persegi di mobile dan menghilangkan badge object teknis',
       readFileSync(join(root, 'src/pages/LokasiAbsen.tsx'), 'utf8')
     ) &&
     !/Badge tone="blue">object: getlokasiabsen/.test(readFileSync(join(root, 'src/pages/LokasiAbsen.tsx'), 'utf8')));
-const docsSrc = readFileSync(join(root, 'src/pages/Docs.tsx'), 'utf8');
-cek('navigasi bagian Dokumentasi rata kiri pada mobile',
-  /grid grid-cols-2 gap-1 rounded-2xl/.test(docsSrc) &&
-    /min-h-9 min-w-0 items-center justify-start/.test(docsSrc));
-cek('keterangan Dokumentasi bisa dilipat di mobile dan tetap terbuka di desktop',
-  /function KeteranganPonsel/.test(docsSrc) &&
-    /useMediaQuery\('\(max-width: 767px\)'\)/.test(docsSrc) &&
-    /const \[open, setOpen\] = useState\(!mobile\)/.test(docsSrc) &&
-    /md:hidden/.test(docsSrc) &&
-    /<KeteranganPonsel>[\s\S]{0,500}<Alert tone="amber">[\s\S]{0,300}GATE_PERANGKAH_TERIKAT/.test(docsSrc));
-cek('hanya card berwarna (Alert) yang dilipat, paragraf tetap utuh',
-  /tunggal\.type === Alert/.test(docsSrc) &&
-    /if \(!kotakBerwarna\) return <>\{children\}<\/>/.test(docsSrc));
-cek('tab Dokumentasi tetap satu baris di desktop',
-  /md:flex md:flex-nowrap md:justify-between/.test(docsSrc) &&
-    /md:flex-none md:whitespace-nowrap/.test(docsSrc));
-cek('daftar object mati Dokumentasi rapi di grid pada mobile',
-  /grid grid-cols-2 gap-1\.5 sm:grid-cols-3 lg:grid-cols-4/.test(docsSrc));
 cek('skeleton tanpa judul halaman mengikuti header yang benar-benar dirender',
-  /const adaHeaderHalaman =\s*pageId === 'tabBeranda' \|\| pageId === 'tabPresensi' \|\| pageId === 'tabDocs'/.test(appSrc) &&
+  /const adaHeaderHalaman =\s*pageId === 'tabBeranda' \|\| pageId === 'tabPresensi'/.test(appSrc) &&
     /\{adaHeaderHalaman && header\}/.test(appSrc));
 cek('rute aktif mulai di-prefetch selama login atau verifikasi sesi',
   /loadPageModule\(activePage\)\.catch\(\(\) => undefined\)/.test(appSrc));
@@ -149,10 +135,10 @@ cek('hard refresh menampilkan boot shell sebelum React mount',
 // di `index.html` ikut berubah — supaya tidak ada lompatan tata letak/warna.
 const bootIds = [...htmlSrc.matchAll(/data-boot="(tab[A-Za-z]+)"/g)].map(m => m[1]);
 cek('boot shell menyediakan satu kerangka untuk setiap halaman PAGES',
-  ['tabBeranda', 'tabPresensi', 'tabPerizinan', 'tabLaporan', 'tabLokasiAbsen', 'tabWeb', 'tabDocs', 'tabManajemenAkun']
+  ['tabBeranda', 'tabPresensi', 'tabPerizinan', 'tabLaporan', 'tabLokasiAbsen', 'tabWeb', 'tabManajemenAkun']
     .every(id => bootIds.includes(id)));
-cek('boot sidebar meniru 6 + 1 + 1 menu seperti PAGES/GROUP_ORDER',
-  (htmlSrc.match(/class="boot-item"/g) ?? []).length === 8 &&
+cek('boot sidebar meniru 6 menu utama + 1 admin seperti PAGES/GROUP_ORDER',
+  (htmlSrc.match(/class="boot-item"/g) ?? []).length === 7 &&
     htmlSrc.includes('background: oklch(0.372 0.044 257.287 / 0.6)'));
 cek('boot memakai warna skeleton yang sama dengan <Skeleton> (bg-slate-200/70)',
   htmlSrc.includes('background: oklch(0.929 0.013 255.508 / 0.7)') &&

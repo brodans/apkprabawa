@@ -249,7 +249,7 @@ export default function LoginScreen({ onLogin, onLoginStart, isDarkMode, toggleD
       // tapi Storage sudah bersih lebih dulu di sini, sebelum render apa pun.
       clearSessionByRole(akun.role === 'admin' ? 'user' : 'admin');
 
-      setCurrentUser(akun, token);
+      await setCurrentUser(akun, token);
       dispatch({ type: 'AUTH_SUCCESS' });
       onLogin();
     } catch (err) {
