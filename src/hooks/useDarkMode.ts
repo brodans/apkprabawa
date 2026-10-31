@@ -3,14 +3,25 @@ import { bacaStorage, tulisStorage } from '../lib/storageAman';
 
 /** Kirim tema ke Android (dipanggil bila jalan sebagai Tauri APK). */
 function syncThemeToAndroid(isDark: boolean) {
-  try {
-    // AndroidPrabawa diinjeksi oleh MainActivity.kt via addJavascriptInterface.
-    const bridge = (window as unknown as Record<string, unknown>).AndroidPrabawa as
-      | { setTheme?: (dark: boolean) => void }
-      | undefined;
-    bridge?.setTheme?.(isDark);
-  } catch {
-    // Bukan Android / bridge belum siap — abaikan.
+  const trySync = () => {
+    try {
+      // AndroidPrabawa diinjeksi oleh MainActivity.kt via addJavascriptInterface.
+      const bridge = (window as unknown as Record<string, unknown>).AndroidPrabawa as
+        | { setTheme?: (dark: boolean) => void }
+        | undefined;
+      if (typeof bridge?.setTheme === 'function') {
+        bridge.setTheme(isDark);
+        return true;
+      }
+    } catch {
+      // Bukan Android / bridge belum siap — abaikan.
+    }
+    return false;
+  };
+
+  if (!trySync()) {
+    // Jika bridge belum selesai diinjeksi Kotlin saat awal muat, coba beberapa saat lagi.
+    [50, 150, 300, 600, 1200, 2500, 5000].forEach((ms) => setTimeout(trySync, ms));
   }
 }
 

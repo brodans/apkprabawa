@@ -248,6 +248,10 @@
           // Sync theme-color meta dengan tema
           var metaTheme = document.getElementById('theme-color-meta');
           if (metaTheme) metaTheme.setAttribute('content', dark ? '#020617' : '#ffffff');
+          // Sinkronkan ke bridge native Android jika sudah terpasang
+          if (window.AndroidPrabawa && typeof window.AndroidPrabawa.setTheme === 'function') {
+            window.AndroidPrabawa.setTheme(dark);
+          }
         } catch(e) {}
       })();
     </script>

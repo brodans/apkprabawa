@@ -62,13 +62,17 @@ put(activity, `package id.go.jatim.prabawa
 
 import android.content.res.Configuration
 import android.graphics.Color
+import android.graphics.drawable.ColorDrawable
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.view.View
 import android.view.ViewGroup
+import android.view.ViewTreeObserver
+import android.view.WindowManager
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
+import androidx.activity.SystemBarStyle
 import androidx.activity.enableEdgeToEdge
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
@@ -82,50 +86,73 @@ class MainActivity : TauriActivity() {
   inner class PrabawaBridge {
     @JavascriptInterface
     fun setTheme(dark: Boolean) {
-      runOnUiThread { applySystemBarTheme(dark) }
+      applySystemBarTheme(dark)
     }
   }
 
   private val mainHandler = Handler(Looper.getMainLooper())
   private var bridgeInjected = false
+  private var checkAttempts = 0
+  private val maxCheckAttempts = 30 // Coba selama 6 detik (30 x 200ms)
 
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
 
-    // Edge-to-edge: konten web boleh menempel ke area sistem bar.
-    enableEdgeToEdge()
-    WindowCompat.setDecorFitsSystemWindows(window, false)
-
-    // Status bar & navigation bar SELALU transparan.
-    window.statusBarColor = Color.TRANSPARENT
-    window.navigationBarColor = Color.TRANSPARENT
-
-    // Padding otomatis agar konten web tidak tertutup system bar.
-    ViewCompat.setOnApplyWindowInsetsListener(window.decorView) { _, insets ->
-      val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-      window.decorView.setPadding(bars.left, bars.top, bars.right, bars.bottom)
-      WindowInsetsCompat.CONSUMED
-    }
-
-    // Terapkan tema awal dari system dark-mode setting.
+    // Terapkan tema awal dari setting sistem Android terlebih dahulu
     val systemIsDark = (resources.configuration.uiMode and
                         Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
     applySystemBarTheme(systemIsDark)
-    window.decorView.post { injectBridge() }
+
+    // Berikan padding pada decorView agar konten web tidak tertutup sistem bar.
+    ViewCompat.setOnApplyWindowInsetsListener(window.decorView) { _, insets ->
+      val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+      window.decorView.setPadding(bars.left, bars.top, bars.right, bars.bottom)
+      insets
+    }
+
+    // Pasang listener agar WebView langsung tertangkap begitu ditambahkan ke view hierarchy
+    window.decorView.viewTreeObserver.addOnGlobalLayoutListener(object : ViewTreeObserver.OnGlobalLayoutListener {
+      override fun onGlobalLayout() {
+        if (!bridgeInjected) {
+          val wv = findWebView(window.decorView)
+          if (wv != null) {
+            injectBridge(wv)
+          }
+        }
+      }
+    })
+
+    // Mulai polling fallback jika OnGlobalLayoutListener terlewati
+    startBridgeInjectionLoop()
   }
 
   override fun onResume() {
     super.onResume()
-    // Injeksi JS bridge ke WebView Tauri. Tauri membuat WebView secara async
-    // di thread Rust/JNI, sehingga kita coba pasang sesegera mungkin.
     if (!bridgeInjected) {
-      mainHandler.postDelayed({ injectBridge() }, 400)
+      startBridgeInjectionLoop()
+    } else {
+      val wv = findWebView(window.decorView)
+      syncThemeFromWeb(wv)
     }
   }
 
-  private fun injectBridge() {
-    val wv = findWebView(window.decorView) ?: return
+  private fun startBridgeInjectionLoop() {
+    if (bridgeInjected) return
+    val wv = findWebView(window.decorView)
+    if (wv != null) {
+      injectBridge(wv)
+      return
+    }
+    checkAttempts++
+    if (checkAttempts < maxCheckAttempts) {
+      mainHandler.postDelayed({ startBridgeInjectionLoop() }, 200)
+    }
+  }
+
+  private fun injectBridge(wv: WebView) {
+    if (bridgeInjected) return
     bridgeInjected = true
+
     wv.addJavascriptInterface(PrabawaBridge(), "AndroidPrabawa")
 
     // Pengaturan penting untuk Midtrans Snap di WebView Android:
@@ -139,16 +166,30 @@ class MainActivity : TauriActivity() {
     cookieManager.setAcceptCookie(true)
     cookieManager.setAcceptThirdPartyCookies(wv, true)
 
-    // Baca tema tersimpan Prabawa dari localStorage dan sinkronkan status bar.
-    wv.evaluateJavascript(
-      "(function(){ try { return localStorage.getItem('theme') || ''; } catch(e){ return ''; } })()"
-    ) { result ->
-      val tema = result?.trim('"') ?: ""
-      runOnUiThread {
-        // Jika localStorage belum ada / kosong, pakai system dark mode.
-        val systemIsDark = (resources.configuration.uiMode and
-                            Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
-        applySystemBarTheme(if (tema == "dark") true else if (tema == "light") false else systemIsDark)
+    // Sinkronkan tema dari web segera setelah WebView siap
+    syncThemeFromWeb(wv)
+  }
+
+  private fun syncThemeFromWeb(wv: WebView?) {
+    if (wv == null) return
+    val checkScript = """
+      (function() {
+        try {
+          var isDark = document.documentElement.classList.contains('dark') ||
+                       (document.body && document.body.dataset && document.body.dataset.theme === 'dark') ||
+                       localStorage.getItem('theme') === 'dark';
+          return isDark ? 'dark' : 'light';
+        } catch(e) {
+          return '';
+        }
+      })()
+    """.trimIndent()
+
+    wv.evaluateJavascript(checkScript) { result ->
+      if (result?.contains("dark") == true) {
+        applySystemBarTheme(true)
+      } else if (result?.contains("light") == true) {
+        applySystemBarTheme(false)
       }
     }
   }
@@ -167,23 +208,53 @@ class MainActivity : TauriActivity() {
 
   override fun onConfigurationChanged(newConfig: Configuration) {
     super.onConfigurationChanged(newConfig)
-    val isDark = (newConfig.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
-    applySystemBarTheme(isDark)
+    val wv = findWebView(window.decorView)
+    if (wv != null) {
+      syncThemeFromWeb(wv)
+    } else {
+      val isDark = (newConfig.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+      applySystemBarTheme(isDark)
+    }
   }
 
   /**
-   * Terapkan warna ikon status bar & nav bar sesuai tema.
+   * Terapkan warna background dan icon status bar & nav bar sesuai tema:
    *
-   * Light mode: isAppearanceLightStatusBars = true  → ikon gelap (hitam), terlihat di bg terang
-   * Dark mode:  isAppearanceLightStatusBars = false → ikon terang (putih), terlihat di bg gelap
+   * Light mode:
+   *   Bar background = #FFFFFF (putih bersih)
+   *   isAppearanceLightStatusBars = true  → icon GELAP / HITAM (kontras tinggi & terlihat jelas di background putih)
+   *   isAppearanceLightNavigationBars = true
    *
-   * BEHAVIOR_DEFAULT: sistem bar SELALU tampil, tidak pernah auto-hide.
+   * Dark mode:
+   *   Bar background = #0F172A (navy gelap khas Prabawa)
+   *   isAppearanceLightStatusBars = false → icon TERANG / PUTIH (kontras tinggi & terlihat jelas di background navy gelap)
+   *   isAppearanceLightNavigationBars = false
    */
   private fun applySystemBarTheme(isDark: Boolean) {
-    val controller = WindowInsetsControllerCompat(window, window.decorView)
-    controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_DEFAULT
-    controller.isAppearanceLightStatusBars = !isDark
-    controller.isAppearanceLightNavigationBars = !isDark
+    runOnUiThread {
+      val barColor = if (isDark) Color.parseColor("#0F172A") else Color.parseColor("#FFFFFF")
+
+      // 1. AndroidX edge-to-edge styling
+      enableEdgeToEdge(
+        statusBarStyle = if (isDark) SystemBarStyle.dark(barColor) else SystemBarStyle.light(barColor, barColor),
+        navigationBarStyle = if (isDark) SystemBarStyle.dark(barColor) else SystemBarStyle.light(barColor, barColor)
+      )
+
+      // 2. Set background pada window dan decorView agar area padding mengikuti warna tema
+      window.setBackgroundDrawable(ColorDrawable(barColor))
+      window.decorView.setBackgroundColor(barColor)
+
+      // 3. Beri warna solid pada status bar dan navigation bar
+      window.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
+      window.statusBarColor = barColor
+      window.navigationBarColor = barColor
+
+      // 4. Atur icon status bar & navigation bar
+      val controller = WindowInsetsControllerCompat(window, window.decorView)
+      controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_DEFAULT
+      controller.isAppearanceLightStatusBars = !isDark
+      controller.isAppearanceLightNavigationBars = !isDark
+    }
   }
 }
 `);
@@ -191,10 +262,10 @@ class MainActivity : TauriActivity() {
 put(join(root, 'res/values/colors.xml'), `<resources><color name="splash_background">#0F172A</color><color name="splash_icon_background">#0F172A</color></resources>
 `);
 
-put(join(root, 'res/values/themes.xml'), `<resources xmlns:tools="http://schemas.android.com/tools"><style name="Theme.prabawa" parent="Theme.Material3.DayNight.NoActionBar"><item name="android:windowLightStatusBar">true</item><item name="android:statusBarColor">@android:color/transparent</item><item name="android:windowLightNavigationBar">true</item><item name="android:navigationBarColor">@android:color/transparent</item><item name="android:windowActionModeOverlay">true</item><item name="android:windowNoTitle">true</item><item name="android:windowSplashScreenBackground">@color/splash_background</item><item name="android:windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item></style></resources>
+put(join(root, 'res/values/themes.xml'), `<resources xmlns:tools="http://schemas.android.com/tools"><style name="Theme.prabawa" parent="Theme.Material3.DayNight.NoActionBar"><item name="android:windowLightStatusBar">true</item><item name="android:statusBarColor">#FFFFFF</item><item name="android:windowLightNavigationBar">true</item><item name="android:navigationBarColor">#FFFFFF</item><item name="android:windowBackground">#FFFFFF</item><item name="android:colorBackground">#FFFFFF</item><item name="android:windowActionModeOverlay">true</item><item name="android:windowNoTitle">true</item><item name="android:windowSplashScreenBackground">@color/splash_background</item><item name="android:windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item></style></resources>
 `);
 
-put(join(root, 'res/values-night/themes.xml'), `<resources xmlns:tools="http://schemas.android.com/tools"><style name="Theme.prabawa" parent="Theme.Material3.DayNight.NoActionBar"><item name="android:windowLightStatusBar">false</item><item name="android:statusBarColor">@android:color/transparent</item><item name="android:windowLightNavigationBar">false</item><item name="android:navigationBarColor">@android:color/transparent</item><item name="android:windowSplashScreenBackground">@color/splash_background</item><item name="android:windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item></style></resources>
+put(join(root, 'res/values-night/themes.xml'), `<resources xmlns:tools="http://schemas.android.com/tools"><style name="Theme.prabawa" parent="Theme.Material3.DayNight.NoActionBar"><item name="android:windowLightStatusBar">false</item><item name="android:statusBarColor">#0F172A</item><item name="android:windowLightNavigationBar">false</item><item name="android:navigationBarColor">#0F172A</item><item name="android:windowBackground">#0F172A</item><item name="android:colorBackground">#0F172A</item><item name="android:windowActionModeOverlay">true</item><item name="android:windowNoTitle">true</item><item name="android:windowSplashScreenBackground">@color/splash_background</item><item name="android:windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item></style></resources>
 `);
 
 const gradle = join(process.cwd(), 'src-tauri/gen/android/app/build.gradle.kts');
