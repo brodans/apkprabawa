@@ -321,6 +321,9 @@ class MainActivity : TauriActivity() {
       window.setBackgroundDrawable(ColorDrawable(workspaceColor))
       window.decorView.setBackgroundColor(workspaceColor)
 
+      // Pastikan WebView tidak memakai background putih bawaan
+      findWebView(window.decorView)?.setBackgroundColor(workspaceColor)
+
       // 3. Tanpa enforcement kontras bawaan Android (scrim putih/abu di status &
       //    navigation bar) → ikon selalu dihitung dari tema aktif.
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {

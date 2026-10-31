@@ -70,10 +70,10 @@ cek('scroll vertikal halaman hanya berada pada kontainer konten',
 cek('padding halaman tidak mendorong scrollbar dari tepi viewport',
   /padding-left:\s*max\(1rem, var\(--poni-kiri\)\)/.test(cssSrc) &&
     /padding-right:\s*max\(1rem, var\(--poni-kanan\)\)/.test(cssSrc));
-cek('workspace Android berhenti di atas navbar dan padding tidak dobel',
+cek('workspace Android tetap full-screen sampai belakang navbar dan konten dibatasi safe-area',
   appSrc.includes('poni-workspace bg-slate-50') &&
-    /body\.is-native \.poni-workspace\s*\{[^}]*height:\s*calc\(100dvh - var\(--poni-bawah, var\(--sab\)\)\)/.test(cssSrc) &&
-    /body\.is-native \.poni-workspace \.poni-konten\s*\{\s*padding-bottom:\s*1\.25rem !important/.test(cssSrc));
+    /body\.is-native \.poni-workspace,\s*body\.is-native \.poni-startup-shell\s*\{[^}]*height:\s*100dvh !important/.test(cssSrc) &&
+    /body\.is-native \.poni-konten\s*\{[^}]*padding-bottom:\s*calc\(var\(--poni-bawah, var\(--sab\)\)/.test(cssSrc));
 cek('satu aturan global scrollbar, tanpa deklarasi yang saling menimpa',
   (cssSrc.match(/\*::-webkit-scrollbar\s*\{/g) ?? []).length === 1 &&
     (cssSrc.match(/^\s*::-webkit-scrollbar\s*\{/gm) ?? []).length === 0);
@@ -158,12 +158,12 @@ cek('splash brand statis tampil sebelum React siap dan dilepas setelah mount',
     /boot-splash-logo[^]*icon-192\.png/.test(htmlSrc) &&
     /boot-splash-hidden/.test(appSrc) &&
     /setTimeout\(\(\) => splash\.classList\.add\('boot-splash-hidden'\), 520\)/.test(appSrc));
-cek('skeleton boot mobile mengunci tinggi flex dan safe area bawah',
+cek('skeleton boot mobile tetap full-screen dan safe area bawah melindungi konten',
   /\.boot-content \{[^}]*min-height: 0/.test(htmlSrc) &&
-    /body\.is-native \.boot-shell \{ height: calc\(100dvh - var\(--poni-bawah/.test(htmlSrc) &&
+    /body\.is-native \.boot-shell \{ height: 100dvh;/.test(htmlSrc) &&
     /poni-startup-shell fixed inset-0[^\"]*min-h-0/.test(appSrc) &&
     /flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden/.test(appSrc) &&
-    /body\.is-native \.poni-startup-shell\s*\{\s*height:\s*calc\(100dvh - var\(--poni-bawah/.test(cssSrc));
+    /body\.is-native \.poni-startup-shell\s*\{[^}]*height:\s*100dvh !important/.test(cssSrc));
 cek('skeleton Beranda saat auto-login memenuhi layout mobile',
   /if \(pageId === 'tabBeranda' && !pegawai && serverAutoLoginPending\)[\s\S]{0,800}stats\(4, \[0, 1, 2, 3\]\)[\s\S]{0,800}grid grid-cols-1 gap-6 lg:grid-cols-2/.test(appSrc));
 cek('input captcha lebar penuh, kotak captcha berukuran tetap',

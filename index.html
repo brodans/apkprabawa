@@ -169,10 +169,7 @@
       .boot-main { flex: 1 1 0%; min-height: 0; overflow-y: auto; padding-top: 1.25rem; padding-left: max(1rem, var(--poni-kiri)); padding-right: max(1rem, var(--poni-kanan)); padding-bottom: calc(var(--poni-bawah) + 1.25rem); box-sizing: border-box; }
       @media (min-width: 640px) { .boot-main { padding-top: 1.5rem; padding-left: max(1.5rem, var(--poni-kiri)); padding-right: max(1.5rem, var(--poni-kanan)); padding-bottom: max(1.5rem, var(--poni-bawah)); } }
       @media (min-width: 1024px) { .boot-main { padding-top: 1.75rem; padding-left: max(2rem, var(--poni-kiri)); padding-right: max(2rem, var(--poni-kanan)); padding-bottom: max(2rem, var(--poni-bawah)); } }
-      body.is-native .boot-shell { height: calc(100dvh - var(--poni-bawah, var(--sab))); min-height: 0; }
-      body.is-native .boot-main { padding-bottom: 1.25rem; }
-      @media (min-width: 640px) { body.is-native .boot-main { padding-bottom: 1.5rem; } }
-      @media (min-width: 1024px) { body.is-native .boot-main { padding-bottom: 1.75rem; } }
+      body.is-native .boot-shell { height: 100dvh; min-height: 0; }
 
       /* ── Halaman (PageLoading root: w-full space-y-6 / space-y-5) ── */
       .boot-hal { width: 100%; display: flex; flex-direction: column; gap: 1.5rem; }
@@ -262,10 +259,10 @@
           var theme = localStorage.getItem('theme');
           var dark = theme === 'dark' || (!theme && window.matchMedia('(prefers-color-scheme: dark)').matches);
           document.documentElement.classList.toggle('dark', dark);
-          document.body.style.background = dark ? '#020617' : '#f1f5f9';
+          document.body.style.background = dark ? '#0B1120' : '#f8fafc';
           // Sync theme-color meta dengan tema
           var metaTheme = document.getElementById('theme-color-meta');
-          if (metaTheme) metaTheme.setAttribute('content', dark ? '#020617' : '#ffffff');
+          if (metaTheme) metaTheme.setAttribute('content', dark ? '#0B1120' : '#ffffff');
           // Sinkronkan ke bridge native Android jika sudah terpasang
           if (window.AndroidPrabawa && typeof window.AndroidPrabawa.setTheme === 'function') {
             window.AndroidPrabawa.setTheme(dark);
