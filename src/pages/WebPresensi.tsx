@@ -309,7 +309,7 @@ function Modal({ judul, onTutup, children, lebar = false, kotak = false, mediaMo
 
   return createPortal(
     <div
-      className={`fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 transition-all duration-150 ${
+      className={`modal-layer fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 transition-all duration-150 ${
         visible ? 'bg-black/40 backdrop-blur-[2px]' : 'bg-black/0 backdrop-blur-none'
       }`}
       onClick={tutup}

@@ -287,13 +287,21 @@
   }
 
   /* Pastikan elemen fixed bottom terdorong ke atas dengan aman */
-  body.is-native .fixed.bottom-0 {
-    bottom: var(--poni-bawah, var(--sab)) !important;
+  .fixed.bottom-0 {
+    bottom: var(--poni-bawah, var(--sab, 0px)) !important;
   }
 
   /* Toast: dorong ke atas aman-area navigation bar di Android */
-  body.is-native .fixed.bottom-4 {
-    bottom: calc(var(--poni-bawah, var(--sab)) + 1rem) !important;
+  .fixed.bottom-4 {
+    bottom: calc(var(--poni-bawah, var(--sab, 0px)) + 1rem) !important;
+  }
+  .fixed.bottom-4.right-4 {
+    right: max(1rem, var(--poni-kanan, 0px)) !important;
+  }
+  @media (max-width: 639px) {
+    .fixed.bottom-4.left-4 {
+      left: max(1rem, var(--poni-kiri, 0px)) !important;
+    }
   }
 
   /* -- MIDTRANS SNAP WINDOW SAFE AREA OVERRIDES (persis Mesen.Ae-Capacitor) -- */
@@ -438,6 +446,19 @@
  */
 .modal-layer {
   right: var(--dev-panel-right-offset, 0px) !important;
+}
+
+.modal-layer.fixed.inset-0 {
+  --modal-safe-inset-top: max(1rem, var(--poni-atas, var(--sat, 0px)));
+  --modal-safe-inset-right: max(1rem, var(--poni-kanan, 0px));
+  --modal-safe-inset-bottom: max(1rem, var(--poni-bawah, var(--sab, 0px)));
+  --modal-safe-inset-left: max(1rem, var(--poni-kiri, 0px));
+  padding: var(--modal-safe-inset-top) var(--modal-safe-inset-right)
+    var(--modal-safe-inset-bottom) var(--modal-safe-inset-left);
+}
+
+.modal-layer.fixed.inset-0 > .modal-panel-enter {
+  max-height: calc(100dvh - var(--modal-safe-inset-top) - var(--modal-safe-inset-bottom));
 }
 
 @keyframes modal-overlay-in {

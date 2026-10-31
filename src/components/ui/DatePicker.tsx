@@ -53,6 +53,13 @@ const EST_HEIGHT = 360;
 const GAP = 4;
 const MARGIN = 8;
 
+function readSafeAreaInset(property: '--poni-atas' | '--poni-kanan' | '--poni-bawah' | '--poni-kiri') {
+  const value = Number.parseFloat(
+    getComputedStyle(document.documentElement).getPropertyValue(property)
+  );
+  return Number.isFinite(value) ? value : 0;
+}
+
 type PanelView = 'days' | 'months' | 'years';
 
 interface SelisihHari {
@@ -118,10 +125,16 @@ export default function DatePicker({
   const [view, setView] = useState<PanelView>('days');
   const [viewDate, setViewDate] = useState<Date>(() => selected ?? new Date());
   const [openAbove, setOpenAbove] = useState(false);
-  const [popupStyle, setPopupStyle] = useState<{ top: number; left: number; width: number }>({
+  const [popupStyle, setPopupStyle] = useState<{
+    top: number;
+    left: number;
+    width: number;
+    maxHeight: number;
+  }>({
     top: 0,
     left: 0,
     width: POPUP_WIDTH,
+    maxHeight: EST_HEIGHT,
   });
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -142,30 +155,23 @@ export default function DatePicker({
     const devOffset = Number.parseFloat(
       getComputedStyle(document.documentElement).getPropertyValue('--dev-panel-right-offset') || '0'
     );
-    const usableWidth = Math.max(vw - devOffset, 0);
+    const batasKiri = readSafeAreaInset('--poni-kiri') + MARGIN;
+    const batasKanan = vw - readSafeAreaInset('--poni-kanan') - devOffset - MARGIN;
+    const batasAtas = readSafeAreaInset('--poni-atas') + MARGIN;
+    const batasBawah = vh - readSafeAreaInset('--poni-bawah') - MARGIN;
     const popupH = popupRef.current?.offsetHeight || EST_HEIGHT;
-    const width = Math.min(POPUP_WIDTH, Math.max(usableWidth - MARGIN * 2, 220));
+    const width = Math.max(0, Math.min(POPUP_WIDTH, batasKanan - batasKiri));
+    const left = Math.min(Math.max(rect.left, batasKiri), Math.max(batasKiri, batasKanan - width));
 
-    let left = rect.left;
-    if (left + width > usableWidth - MARGIN) left = Math.max(MARGIN, usableWidth - width - MARGIN);
-    if (left < MARGIN) left = MARGIN;
-
-    const spaceBelow = vh - rect.bottom - MARGIN;
-    const spaceAbove = rect.top - MARGIN;
+    const spaceBelow = Math.max(0, batasBawah - rect.bottom - GAP);
+    const spaceAbove = Math.max(0, rect.top - batasAtas - GAP);
     // Condong ke bawah kalau muat; kalau tidak, condong ke atas.
     const below = spaceBelow >= popupH || spaceBelow >= spaceAbove;
-
-    let top: number;
-    if (below) {
-      top = rect.bottom + GAP;
-      if (top + popupH > vh - MARGIN) top = Math.max(MARGIN, vh - MARGIN - popupH);
-    } else {
-      top = rect.top - GAP - popupH;
-      if (top < MARGIN) top = MARGIN;
-    }
+    const maxHeight = below ? spaceBelow : spaceAbove;
+    const top = below ? rect.bottom + GAP : rect.top - Math.min(popupH, maxHeight) - GAP;
 
     setOpenAbove(!below);
-    setPopupStyle({ top, left, width });
+    setPopupStyle({ top, left, width, maxHeight });
   }, []);
 
   useEffect(() => {
@@ -289,8 +295,14 @@ export default function DatePicker({
         <div className="fixed inset-0 z-[9998]" onClick={() => setOpen(false)} />
         <div
           ref={popupRef}
-          style={{ position: 'fixed', top: popupStyle.top, left: popupStyle.left, width: popupStyle.width }}
-          className={`modal-layer z-[9999] bg-white dark:bg-slate-800 rounded-2xl shadow-2xl shadow-slate-950/25 border border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col ${
+          style={{
+            position: 'fixed',
+            top: popupStyle.top,
+            left: popupStyle.left,
+            width: popupStyle.width,
+            maxHeight: popupStyle.maxHeight,
+          }}
+          className={`modal-layer z-[9999] bg-white dark:bg-slate-800 rounded-2xl shadow-2xl shadow-slate-950/25 border border-slate-200 dark:border-slate-700 overflow-y-auto flex flex-col ${
             openAbove ? 'animate-pop-in-above' : 'animate-pop-in-below'
           }`}
           onClick={event => event.stopPropagation()}

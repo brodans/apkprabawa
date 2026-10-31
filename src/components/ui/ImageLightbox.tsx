@@ -297,10 +297,13 @@ export default function ImageLightbox({
       role="dialog"
       aria-modal="true"
       aria-label={currentTitle || 'Pratinjau Foto'}
-      className="modal-layer fixed inset-0 z-[9999] flex flex-col items-center justify-between bg-slate-950/95 backdrop-blur-md p-4 transition-all duration-300 select-none animate-in fade-in touch-none overscroll-contain"
+      className="modal-layer fixed inset-0 z-[9999] flex min-h-0 flex-col items-center justify-between bg-slate-950/95 backdrop-blur-md p-4 transition-all duration-300 select-none animate-in fade-in touch-none overscroll-contain"
+      style={{
+        padding: 'max(1rem, var(--poni-atas, var(--sat, 0px))) max(1rem, var(--poni-kanan, 0px)) max(1rem, var(--poni-bawah, var(--sab, 0px))) max(1rem, var(--poni-kiri, 0px))',
+      }}
     >
       {/* Top Header */}
-      <div className="w-full max-w-4xl flex items-center justify-between z-10 py-3 border-b border-slate-800/60 shrink-0">
+      <div className="z-10 flex w-full max-w-4xl shrink-0 items-center justify-between gap-3 border-b border-slate-800/60 py-3">
         <div className="text-slate-100 font-semibold text-sm md:text-base line-clamp-1 pr-4 flex items-center gap-2">
           <span>{currentTitle || 'Pratinjau Foto'}</span>
           {hasMultiple && images && (
@@ -311,7 +314,9 @@ export default function ImageLightbox({
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <button
+            type="button"
             onClick={handleDownload}
+            aria-label="Unduh foto"
             className="text-blue-400 hover:text-blue-300 transition-colors p-2.5 bg-slate-900/60 hover:bg-slate-800 rounded-full cursor-pointer shadow-lg outline-none ring-2 ring-transparent focus:ring-blue-500 flex items-center gap-1.5 text-xs font-semibold"
             title="Unduh Foto"
             id="lightbox_download"
@@ -321,7 +326,9 @@ export default function ImageLightbox({
           </button>
 
           <button
+            type="button"
             onClick={onClose}
+            aria-label="Tutup pratinjau foto"
             className="text-slate-400 hover:text-white transition-colors p-2.5 bg-slate-900/60 hover:bg-slate-800 rounded-full cursor-pointer shadow-lg outline-none ring-2 ring-transparent focus:ring-blue-500"
             title="Tutup"
             id="close_lightbox_btn"
@@ -334,7 +341,7 @@ export default function ImageLightbox({
       {/* Main Stage */}
       <div
         ref={stageRef}
-        className="flex-1 w-full max-w-4xl flex items-center justify-center relative overflow-hidden my-4 rounded-xl border border-slate-800/40 bg-slate-900/20"
+        className="relative my-2 flex min-h-0 w-full max-w-4xl flex-1 items-center justify-center overflow-hidden rounded-xl border border-slate-800/40 bg-slate-900/20 sm:my-4"
         onMouseDown={handleMouseDown}
         style={{ cursor: scale > 1 ? (isDragging ? 'grabbing' : 'grab') : 'default' }}
       >
@@ -342,10 +349,12 @@ export default function ImageLightbox({
         {hasMultiple && (
           <>
             <button
+              type="button"
               onClick={(e) => {
                 e.stopPropagation();
                 handlePrev();
               }}
+              aria-label="Foto sebelumnya"
               className="absolute left-4 top-1/2 -translate-y-1/2 z-30 p-3 rounded-full bg-slate-950/70 hover:bg-slate-900 text-slate-200 border border-slate-700 hover:text-white transition-all cursor-pointer shadow-lg hover:scale-105 active:scale-95 flex items-center justify-center outline-none ring-2 ring-transparent focus:ring-blue-500"
               title="Foto Sebelumnya"
               id="lightbox_prev_btn"
@@ -354,10 +363,12 @@ export default function ImageLightbox({
             </button>
 
             <button
+              type="button"
               onClick={(e) => {
                 e.stopPropagation();
                 handleNext();
               }}
+              aria-label="Foto berikutnya"
               className="absolute right-4 top-1/2 -translate-y-1/2 z-30 p-3 rounded-full bg-slate-950/70 hover:bg-slate-900 text-slate-200 border border-slate-700 hover:text-white transition-all cursor-pointer shadow-lg hover:scale-105 active:scale-95 flex items-center justify-center outline-none ring-2 ring-transparent focus:ring-blue-500"
               title="Foto Berikutnya"
               id="lightbox_next_btn"
@@ -375,7 +386,7 @@ export default function ImageLightbox({
         )}
 
         <div
-          className={`transition-transform duration-100 ease-out flex items-center justify-center transition-opacity duration-300 ${
+          className={`flex h-full w-full items-center justify-center transition-transform duration-100 ease-out transition-opacity duration-300 ${
             isImgLoading ? 'opacity-40' : 'opacity-100'
           }`}
           style={{
@@ -389,7 +400,7 @@ export default function ImageLightbox({
             alt={currentTitle}
             onLoad={() => setIsImgLoading(false)}
             onError={() => setIsImgLoading(false)}
-            className="max-w-[90vw] max-h-[75vh] object-contain rounded-md shadow-2xl pointer-events-none"
+            className="max-h-full max-w-full rounded-md object-contain shadow-2xl pointer-events-none"
             referrerPolicy="no-referrer"
           />
         </div>

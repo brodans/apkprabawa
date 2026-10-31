@@ -51,6 +51,13 @@ const TINGGI_DAFTAR_MAKS = 256;
  */
 const TINGGI_MINIMUM = 120;
 
+function readSafeAreaInset(property: '--poni-atas' | '--poni-kanan' | '--poni-bawah' | '--poni-kiri') {
+  const value = Number.parseFloat(
+    getComputedStyle(document.documentElement).getPropertyValue(property)
+  );
+  return Number.isFinite(value) ? value : 0;
+}
+
 export interface OpsiDropdown {
   value: string;
   label: string;
@@ -177,10 +184,12 @@ export default function Dropdown({
     const vv = typeof window !== 'undefined' ? window.visualViewport : null;
     const tinggiLayar = vv?.height ?? window.innerHeight;
     const offsetLayar = vv?.offsetTop ?? 0;
+    const batasAtas = Math.max(offsetLayar, readSafeAreaInset('--poni-atas')) + JARAK_TEPI;
+    const batasBawah = offsetLayar + tinggiLayar - readSafeAreaInset('--poni-bawah') - JARAK_TEPI;
 
     // Ruang yang benar-benar bisa dipakai, dikurangi jarak aman tepi.
-    const ruangBawah = tinggiLayar - (pemicu.bottom - offsetLayar) - JARAK_TEPI;
-    const ruangAtas = pemicu.top - offsetLayar - JARAK_TEPI;
+    const ruangBawah = Math.max(0, batasBawah - pemicu.bottom);
+    const ruangAtas = Math.max(0, pemicu.top - batasAtas);
 
     /*
      * ⚠️ Tinggi daftar penuh (`scrollHeight`) **tidak lagi dipakai** di sini.
@@ -200,7 +209,7 @@ export default function Dropdown({
     // Batasi tinggi daftar dengan ruang yang tersedia, supaya daftar pendek
     // tetap pendek dan daftar panjang tidak pernah keluar layar.
     const ruang = keAtas ? ruangAtas : ruangBawah;
-    setTinggiMaks(Math.max(TINGGI_MINIMUM, Math.min(TINGGI_DAFTAR_MAKS, ruang)));
+    setTinggiMaks(Math.min(TINGGI_DAFTAR_MAKS, ruang));
   }, []);
 
   // Hitung setelah render pertama supaya tinggi panel sudah ada.

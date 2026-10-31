@@ -109,6 +109,13 @@ const PADDING_PANEL = 20;
  */
 export const TINGGI_MINIMUM = 120;
 
+function readSafeAreaInset(property: '--poni-atas' | '--poni-kanan' | '--poni-bawah' | '--poni-kiri') {
+  const value = Number.parseFloat(
+    getComputedStyle(document.documentElement).getPropertyValue(property)
+  );
+  return Number.isFinite(value) ? value : 0;
+}
+
 export type NadaMenu = 'default' | 'danger';
 
 /** Satu isi menu. `id` dipakai sebagai kunci React — jangan pakai index. */
@@ -186,29 +193,33 @@ export function useMenuLayang({
     if (!pemicu) return;
     const rect = pemicu.getBoundingClientRect();
 
-    const ruangBawah = window.innerHeight - rect.bottom - JARAK_TEPI;
-    const ruangAtas = rect.top - JARAK_TEPI;
+    const batasAtas = readSafeAreaInset('--poni-atas') + JARAK_TEPI;
+    const batasBawah = window.innerHeight - readSafeAreaInset('--poni-bawah') - JARAK_TEPI;
+    const ruangBawah = Math.max(0, batasBawah - rect.bottom - 4);
+    const ruangAtas = Math.max(0, rect.top - batasAtas - 4);
 
     // ⚠️ Yang diuji adalah `ruangBawah < TINGGI_MINIMUM` — BUKAN
     // `tinggi > ruangBawah && ruangAtas > ruangBawah`. Lihat penjelasan
     // "Arah buka" di header berkas.
     const keAtas = ruangBawah < TINGGI_MINIMUM && ruangAtas > ruangBawah;
 
-    const top = keAtas ? Math.max(JARAK_TEPI, rect.top - tinggi - 4) : rect.bottom + 4;
+    const maxHeight = keAtas ? ruangAtas : ruangBawah;
+    const top = keAtas
+      ? Math.max(batasAtas, rect.top - Math.min(tinggi, maxHeight) - 4)
+      : rect.bottom + 4;
 
     // Rata ke sisi tombol yang dipilih, lalu dijaga tetap di dalam layar.
     const kiriIdeal = sisi === 'kiri' ? rect.left : rect.right - lebar;
-    const left = Math.max(
-      JARAK_TEPI,
-      Math.min(kiriIdeal, window.innerWidth - lebar - JARAK_TEPI)
-    );
+    const batasKiri = readSafeAreaInset('--poni-kiri') + JARAK_TEPI;
+    const batasKanan = window.innerWidth - readSafeAreaInset('--poni-kanan') - JARAK_TEPI;
+    const left = Math.min(Math.max(kiriIdeal, batasKiri), Math.max(batasKiri, batasKanan - lebar));
 
     setPosisi({
       top,
       left,
       // Ke bawah, ruang yang tersedia boleh lebih kecil dari tinggi menu —
       // panelnya yang digulir, bukan menu yang melompat ke atas.
-      maxHeight: Math.max(TINGGI_MINIMUM, keAtas ? ruangAtas : ruangBawah),
+      maxHeight,
     });
   }, [tinggi, lebar, sisi]);
 

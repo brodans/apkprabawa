@@ -12,6 +12,13 @@ const formatPayload = (value: unknown) => {
   }
 };
 
+const readSafeAreaInset = (property: '--poni-atas' | '--poni-bawah') => {
+  const value = Number.parseFloat(
+    getComputedStyle(document.documentElement).getPropertyValue(property)
+  );
+  return Number.isFinite(value) ? value : 0;
+};
+
 /**
  * Panel Network Inspector.
  *
@@ -79,8 +86,14 @@ export default function DeveloperInspector({
   // Initial FAB positioning boundary check
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const maxY = Math.max(window.innerHeight - 52, 8);
-    setFabY((prev) => Math.min(Math.max(prev, 8), maxY));
+    const syncFabBounds = () => {
+      const minY = readSafeAreaInset('--poni-atas') + 8;
+      const maxY = Math.max(window.innerHeight - readSafeAreaInset('--poni-bawah') - 52, minY);
+      setFabY((prev) => Math.min(Math.max(prev, minY), maxY));
+    };
+    syncFabBounds();
+    window.addEventListener('resize', syncFabBounds);
+    return () => window.removeEventListener('resize', syncFabBounds);
   }, []);
 
   // Mobile FAB Touch/Mouse dragging handler
@@ -91,9 +104,10 @@ export default function DeveloperInspector({
       if (!dragRef.current.active) return;
       const point = 'touches' in event ? event.touches[0] : event;
       const dy = point.clientY - dragRef.current.startY;
+      const minY = readSafeAreaInset('--poni-atas') + 8;
       const nextY = Math.min(
-        Math.max(dragRef.current.originY + dy, 8),
-        Math.max(window.innerHeight - 52, 8)
+        Math.max(dragRef.current.originY + dy, minY),
+        Math.max(window.innerHeight - readSafeAreaInset('--poni-bawah') - 52, minY)
       );
       if (Math.abs(dy) > 4) dragRef.current.moved = true;
       setFabY(nextY);
@@ -265,7 +279,10 @@ export default function DeveloperInspector({
               if (!dragRef.current.moved) setMobileOpen(true);
               dragRef.current.moved = false;
             }}
-            style={{ top: `${fabY}px` }}
+            style={{
+              top: `${fabY}px`,
+              right: 'max(1rem, var(--poni-kanan, 0px))',
+            }}
             className="developer-inspector-layer fixed right-4 z-[2147483000] flex items-center gap-2 rounded-full bg-slate-900 px-3.5 py-2 text-[10px] font-extrabold uppercase tracking-wider text-white shadow-2xl ring-1 ring-slate-700/80 touch-none select-none active:scale-95 transition-transform"
             onMouseDown={(event) => {
               dragRef.current = {
@@ -300,7 +317,13 @@ export default function DeveloperInspector({
               onClick={() => setMobileOpen(false)}
             />
 
-            <aside className="developer-inspector-layer fixed inset-0 z-[2147483000] flex h-[100dvh] w-full flex-col overflow-hidden bg-slate-950 text-slate-200 font-sans shadow-2xl animate-pop-in">
+            <aside
+              className="developer-inspector-layer fixed inset-0 z-[2147483000] flex h-[100dvh] w-full flex-col overflow-hidden bg-slate-950 text-slate-200 font-sans shadow-2xl animate-pop-in"
+              style={{
+                paddingTop: 'max(0.75rem, var(--poni-atas, var(--sat, 0px)))',
+                paddingBottom: 'max(0.75rem, var(--poni-bawah, var(--sab, 0px)))',
+              }}
+            >
               {/* Header */}
               <div className="flex items-center justify-between gap-3 border-b border-slate-800/80 px-4 py-3 shrink-0 bg-slate-900/50">
                 <div className="flex items-center gap-2 min-w-0">
@@ -317,6 +340,7 @@ export default function DeveloperInspector({
                 <button
                   type="button"
                   onClick={() => setMobileOpen(false)}
+                  aria-label="Tutup panel developer"
                   className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-white transition-colors"
                 >
                   <X className="h-4 w-4" />
@@ -448,7 +472,13 @@ export default function DeveloperInspector({
 
               {/* Toast Alert */}
               {copied && (
-                <div className="absolute bottom-4 right-4 flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-[10px] font-bold text-white shadow-xl animate-pop-in">
+                <div
+                  className="absolute right-4 flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-[10px] font-bold text-white shadow-xl animate-pop-in"
+                  style={{
+                    bottom: 'max(1rem, var(--poni-bawah, var(--sab, 0px)))',
+                    right: 'max(1rem, var(--poni-kanan, 0px))',
+                  }}
+                >
                   <Check className="h-3.5 w-3.5" /> Tersalin ke clipboard
                 </div>
               )}
@@ -632,7 +662,13 @@ export default function DeveloperInspector({
 
       {/* Copy Feedback Toast */}
       {copied && (
-        <div className="absolute bottom-4 right-4 flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-[10px] font-bold text-white shadow-xl animate-pop-in">
+        <div
+          className="absolute flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-[10px] font-bold text-white shadow-xl animate-pop-in"
+          style={{
+            bottom: 'max(1rem, var(--poni-bawah, var(--sab, 0px)))',
+            right: 'max(1rem, var(--poni-kanan, 0px))',
+          }}
+        >
           <Check className="h-3.5 w-3.5" /> Tersalin ke clipboard
         </div>
       )}
