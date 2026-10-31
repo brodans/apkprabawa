@@ -325,7 +325,7 @@ export default function LoginScreen({ onLogin, onLoginStart, isDarkMode, toggleD
 
   return (
     <div
-      className="relative min-h-screen flex items-center justify-center p-4 sm:p-8 font-sans transition-colors duration-500 bg-slate-200/80 dark:bg-[#0a0f1c] overflow-hidden selection:bg-indigo-500/30"
+      className="relative h-[100dvh] flex items-center [justify-content:safe_center] p-4 sm:p-8 font-sans transition-colors duration-500 bg-slate-200/80 dark:bg-[#0a0f1c] overflow-x-hidden overflow-y-auto selection:bg-indigo-500/30"
       style={{
         paddingTop: 'max(1rem, var(--poni-atas, 0px))',
         paddingBottom: 'max(1rem, var(--poni-bawah, 0px))',

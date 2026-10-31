@@ -176,6 +176,25 @@
     min-height: 0 !important;
   }
 
+  /* The shared page scrollport must reserve the Android navigation-bar inset. */
+  body.is-native .konten-gulir {
+    padding-bottom: var(--poni-bawah, var(--sab)) !important;
+    box-sizing: border-box;
+  }
+  body.is-native .konten-gulir > .poni-konten {
+    padding-bottom: 1.25rem !important;
+  }
+  @media (min-width: 640px) {
+    body.is-native .konten-gulir > .poni-konten {
+      padding-bottom: 1.5rem !important;
+    }
+  }
+  @media (min-width: 1024px) {
+    body.is-native .konten-gulir > .poni-konten {
+      padding-bottom: 1.75rem !important;
+    }
+  }
+
   /* Beri ruang nyaman pada header/topbar: background mengalir ke bawah status bar tanpa memotong konten */
   .poni-header,
   body.is-native .poni-header,

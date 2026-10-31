@@ -117,6 +117,7 @@ class MainActivity : TauriActivity() {
     // True Edge-to-edge persis seperti Mesen.Ae-Capacitor:
     // Layout mengisi layar penuh secara seamless tanpa padding/scrim/kotak putih
     WindowCompat.setDecorFitsSystemWindows(window, false)
+    window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
     window.decorView.setPadding(0, 0, 0, 0)
 
     // Matikan pemaksaan kontras bawaan Android (scrim abu/putih di status bar & nav bar)
