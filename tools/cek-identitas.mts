@@ -278,7 +278,9 @@ const nativePatch = readFileSync(join(root, 'tools/patch-android-native.mts'), '
 cek('tema navbar Android diserialkan di UI thread',
   /fun setTheme\(dark: Boolean\)\s*\{\s*mainHandler\.post \{ applySystemBarTheme\(dark\) \}/.test(nativePatch) &&
     /window\.navigationBarColor = Color\.TRANSPARENT/.test(nativePatch) &&
-    /controller\.isAppearanceLightNavigationBars = !isDark/.test(nativePatch));
+    /controller\.isAppearanceLightNavigationBars = !isDark/.test(nativePatch) &&
+    /val workspaceColor = if \(isDark\) Color\.parseColor\("#0B1120"\) else Color\.parseColor\("#F8FAFC"\)/.test(nativePatch) &&
+    /window\.setBackgroundDrawable\(ColorDrawable\(workspaceColor\)\)/.test(nativePatch));
 cek('warna navigation bar tidak dipaksa oleh status workspace',
   !/setWorkspaceActive/.test(nativePatch) && !/setWorkspaceActive/.test(readFileSync(join(root, 'src/App.tsx'), 'utf8')));
 cek('template Android memakai Theme.app yang dipasang pada manifest',

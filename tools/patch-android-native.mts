@@ -310,16 +310,16 @@ class MainActivity : TauriActivity() {
    */
   private fun applySystemBarTheme(isDark: Boolean) {
     runOnUiThread {
-      val barColor = if (isDark) Color.parseColor("#0F172A") else Color.parseColor("#FFFFFF")
+      val workspaceColor = if (isDark) Color.parseColor("#0B1120") else Color.parseColor("#F8FAFC")
 
       // Kedua system bar transparan; safe-area CSS menjaga konten di atasnya.
       window.statusBarColor = Color.TRANSPARENT
       window.navigationBarColor = Color.TRANSPARENT
       window.decorView.setPadding(0, 0, 0, 0)
 
-      // 2. Latar belakang window mengikuti tema di balik status bar transparan.
-      window.setBackgroundDrawable(ColorDrawable(barColor))
-      window.decorView.setBackgroundColor(barColor)
+      // Fallback di bawah system bars sama persis dengan latar workspace.
+      window.setBackgroundDrawable(ColorDrawable(workspaceColor))
+      window.decorView.setBackgroundColor(workspaceColor)
 
       // 3. Tanpa enforcement kontras bawaan Android (scrim putih/abu di status &
       //    navigation bar) → ikon selalu dihitung dari tema aktif.
