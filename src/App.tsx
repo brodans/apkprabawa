@@ -1522,13 +1522,22 @@ export default function App() {
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const isAndroidApp = Boolean(
-        (window as unknown as Record<string, unknown>).AndroidPrabawa ||
-        /tauri|android/i.test(navigator.userAgent)
-      );
-      if (isAndroidApp) {
-        document.body.classList.add('is-native');
-      }
+      const checkIsApk = () => {
+        const win = window as unknown as Record<string, unknown>;
+        const isApk = Boolean(
+          win.AndroidPrabawa ||
+          win.__TAURI__ ||
+          win.__TAURI_INTERNALS__ ||
+          win.__TAURI_METADATA__
+        );
+        if (isApk) {
+          document.body.classList.add('is-native');
+          document.documentElement.classList.add('is-native');
+        }
+      };
+      checkIsApk();
+      const t = setTimeout(checkIsApk, 200);
+      return () => clearTimeout(t);
     }
   }, []);
 

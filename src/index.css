@@ -179,22 +179,57 @@
       padding-right: max(1.5rem, var(--poni-kanan)) !important;
     }
   }
-  /* Sidebar — tepi kiri & bawah, karena di HP sidebar menumpuk di atas konten. */
+  /* ─── SIDEBAR NORMAL (WEB) ─── */
   .poni-sidebar {
     padding-left: var(--poni-kiri);
     padding-bottom: var(--poni-bawah);
   }
 
+  /* ─── SIDEBAR FLOAT & CURVE (HANYA DI ANDROID APK - Persis Mesen.Ae-Capacitor) ─── */
+  body.is-native .poni-sidebar,
+  body.is-native aside.poni-sidebar {
+    top: calc(var(--sat) + 0.5rem) !important;
+    margin-top: calc(var(--sat) + 0.5rem) !important;
+    margin-bottom: var(--sab) !important;
+    margin-left: 0 !important;
+    height: calc(100dvh - var(--sat) - var(--sab) - 0.5rem) !important;
+    max-height: calc(100dvh - var(--sat) - var(--sab) - 0.5rem) !important;
+    border-radius: 0 1.25rem 1.25rem 0 !important;
+    border-left: none !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+    border-right: 1px solid rgba(255, 255, 255, 0.08) !important;
+    overflow: visible !important;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.35), 0 10px 10px -5px rgba(0, 0, 0, 0.2) !important;
+  }
+
+  @media (min-width: 1024px) {
+    body.is-native .poni-sidebar,
+    body.is-native aside.poni-sidebar {
+      top: auto !important;
+    }
+  }
+
+  /* Sudut kanan atas header sidebar melengkung rapi mengikuti kontainer */
+  body.is-native .poni-sidebar > div:first-child {
+    border-top-right-radius: 1.25rem !important;
+  }
+
+  /* Sudut kanan bawah footer sidebar melengkung rapi mengikuti kontainer */
+  body.is-native .poni-sidebar > div:last-child {
+    border-bottom-left-radius: 0 !important;
+    border-bottom-right-radius: 1.25rem !important;
+    padding-bottom: 1rem !important;
+  }
+
+  /* Geser tombol toggle sidebar desktop jika di perangkat native */
+  body.is-native button.absolute.-right-3\.5 {
+    top: calc(var(--sat) + 2rem) !important;
+  }
+
   @media (max-width: 639px) {
     html, body, #root { width: 100%; min-width: 0; overflow-x: hidden; }
     button, a, input, select, textarea { touch-action: manipulation; }
-    .poni-sidebar,
-    body.is-native .poni-sidebar {
-      padding-top: max(0.5rem, var(--poni-atas, var(--sat))) !important;
-      padding-bottom: max(1rem, var(--poni-bawah, var(--sab))) !important;
-      padding-right: max(0.75rem, var(--poni-kanan)) !important;
-      box-sizing: border-box !important;
-    }
   }
 
   /* Pastikan elemen fixed bottom terdorong ke atas dengan aman */

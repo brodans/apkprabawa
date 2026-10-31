@@ -253,6 +253,7 @@
           // Sinkronkan ke bridge native Android jika sudah terpasang
           if (window.AndroidPrabawa && typeof window.AndroidPrabawa.setTheme === 'function') {
             window.AndroidPrabawa.setTheme(dark);
+            document.body.classList.add('is-native');
           }
         } catch(e) {}
       })();

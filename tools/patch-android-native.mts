@@ -222,6 +222,7 @@ class MainActivity : TauriActivity() {
           document.documentElement.style.setProperty('--poni-kiri', left);
           document.documentElement.style.setProperty('--poni-kanan', right);
           document.body.classList.add('is-native');
+          document.documentElement.classList.add('is-native');
         } catch(e) {}
       })();
     """.trimIndent()
