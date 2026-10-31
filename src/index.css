@@ -150,6 +150,8 @@
 
   /* Beri ruang nyaman pada kontrol, tanpa memindahkan scroll bar. */
   .poni-header {
+    padding-top: var(--poni-atas, 0px);
+    height: calc(56px + var(--poni-atas, 0px));
     padding-left: max(1rem, var(--poni-kiri));
     padding-right: max(1rem, var(--poni-kanan));
   }

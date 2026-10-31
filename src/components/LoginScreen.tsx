@@ -331,7 +331,7 @@ export default function LoginScreen({ onLogin, onLoginStart, isDarkMode, toggleD
       </div>
 
       {/* ─── Ganti tema ────────────────────────────────────────────── */}
-      <div className="absolute top-6 right-6 z-20">
+      <div className="absolute top-6 right-6 z-20" style={{ top: 'calc(1.5rem + var(--poni-atas, 0px))' }}>
         <button
           onClick={toggleDarkMode}
           className="p-3 rounded-xl bg-white/60 dark:bg-slate-900/60 backdrop-blur-md border border-slate-200 dark:border-slate-800 hover:bg-white dark:hover:bg-slate-800 transition-colors active:scale-95 group text-slate-600 dark:text-white hover:text-slate-800 dark:hover:text-white"

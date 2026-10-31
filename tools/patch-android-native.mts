@@ -63,6 +63,7 @@ put(activity, `package id.go.jatim.prabawa
 import android.content.res.Configuration
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -98,15 +99,26 @@ class MainActivity : TauriActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
 
-    // Terapkan tema awal dari setting sistem Android terlebih dahulu
+    // True Edge-to-edge: konten web mengisi 100% layar tanpa padding/kotak putih
+    WindowCompat.setDecorFitsSystemWindows(window, false)
+    window.decorView.setPadding(0, 0, 0, 0)
+
+    // Matikan pemaksaan kontras bawaan Android (scrim abu/putih di status bar & nav bar)
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+      window.isStatusBarContrastEnforced = false
+      window.isNavigationBarContrastEnforced = false
+    }
+
+    // Terapkan tema awal dari setting sistem Android
     val systemIsDark = (resources.configuration.uiMode and
                         Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
     applySystemBarTheme(systemIsDark)
 
-    // Berikan padding pada decorView agar konten web tidak tertutup sistem bar.
+    // Tangkap insets dan teruskan ukuran status bar & nav bar ke CSS variables di WebView
+    // JANGAN pernah beri padding pada decorView agar aplikasi tidak menyempit / ada kotak putih
     ViewCompat.setOnApplyWindowInsetsListener(window.decorView) { _, insets ->
-      val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-      window.decorView.setPadding(bars.left, bars.top, bars.right, bars.bottom)
+      window.decorView.setPadding(0, 0, 0, 0)
+      sendInsetsToWeb(insets)
       insets
     }
 
@@ -133,6 +145,8 @@ class MainActivity : TauriActivity() {
     } else {
       val wv = findWebView(window.decorView)
       syncThemeFromWeb(wv)
+      val insets = ViewCompat.getRootWindowInsets(window.decorView)
+      if (insets != null) sendInsetsToWeb(insets)
     }
   }
 
@@ -166,8 +180,30 @@ class MainActivity : TauriActivity() {
     cookieManager.setAcceptCookie(true)
     cookieManager.setAcceptThirdPartyCookies(wv, true)
 
-    // Sinkronkan tema dari web segera setelah WebView siap
+    // Kirim insets awal dan sinkronkan tema dari web
+    val insets = ViewCompat.getRootWindowInsets(window.decorView)
+    if (insets != null) sendInsetsToWeb(insets)
     syncThemeFromWeb(wv)
+  }
+
+  private fun sendInsetsToWeb(insets: WindowInsetsCompat) {
+    val statusBars = insets.getInsets(WindowInsetsCompat.Type.statusBars())
+    val navBars = insets.getInsets(WindowInsetsCompat.Type.navigationBars())
+    val density = resources.displayMetrics.density
+    val topDp = (statusBars.top / density).toInt()
+    val bottomDp = (navBars.bottom / density).toInt()
+
+    val wv = findWebView(window.decorView) ?: return
+    wv.evaluateJavascript(
+      """
+      (function() {
+        try {
+          document.documentElement.style.setProperty('--poni-atas', '${topDp}px');
+          document.documentElement.style.setProperty('--poni-bawah', '${bottomDp}px');
+        } catch(e) {}
+      })();
+      """.trimIndent(), null
+    )
   }
 
   private fun syncThemeFromWeb(wv: WebView?) {
@@ -218,38 +254,49 @@ class MainActivity : TauriActivity() {
   }
 
   /**
-   * Terapkan warna background dan icon status bar & nav bar sesuai tema:
+   * Terapkan warna transparan edge-to-edge murni dan kontras ikon status bar & nav bar:
    *
    * Light mode:
-   *   Bar background = #FFFFFF (putih bersih)
-   *   isAppearanceLightStatusBars = true  → icon GELAP / HITAM (kontras tinggi & terlihat jelas di background putih)
+   *   isAppearanceLightStatusBars = true  → icon GELAP / HITAM (kontras tinggi di header terang)
    *   isAppearanceLightNavigationBars = true
    *
    * Dark mode:
-   *   Bar background = #0F172A (navy gelap khas Prabawa)
-   *   isAppearanceLightStatusBars = false → icon TERANG / PUTIH (kontras tinggi & terlihat jelas di background navy gelap)
+   *   isAppearanceLightStatusBars = false → icon TERANG / PUTIH (kontras tinggi di header navy gelap)
    *   isAppearanceLightNavigationBars = false
+   *
+   * Bebas dari kotak putih / scrim / padding decorView!
    */
   private fun applySystemBarTheme(isDark: Boolean) {
     runOnUiThread {
-      val barColor = if (isDark) Color.parseColor("#0F172A") else Color.parseColor("#FFFFFF")
-
-      // 1. AndroidX edge-to-edge styling
+      // 1. AndroidX true transparent edge-to-edge tanpa scrim
       enableEdgeToEdge(
-        statusBarStyle = if (isDark) SystemBarStyle.dark(barColor) else SystemBarStyle.light(barColor, barColor),
-        navigationBarStyle = if (isDark) SystemBarStyle.dark(barColor) else SystemBarStyle.light(barColor, barColor)
+        statusBarStyle = if (isDark) {
+          SystemBarStyle.dark(Color.TRANSPARENT)
+        } else {
+          SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)
+        },
+        navigationBarStyle = if (isDark) {
+          SystemBarStyle.dark(Color.TRANSPARENT)
+        } else {
+          SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)
+        }
       )
 
-      // 2. Set background pada window dan decorView agar area padding mengikuti warna tema
+      // 2. Bar transparan penuh & hilangkan padding decorView
+      window.statusBarColor = Color.TRANSPARENT
+      window.navigationBarColor = Color.TRANSPARENT
+      window.decorView.setPadding(0, 0, 0, 0)
+
+      val barColor = if (isDark) Color.parseColor("#0F172A") else Color.parseColor("#FFFFFF")
       window.setBackgroundDrawable(ColorDrawable(barColor))
       window.decorView.setBackgroundColor(barColor)
 
-      // 3. Beri warna solid pada status bar dan navigation bar
-      window.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
-      window.statusBarColor = barColor
-      window.navigationBarColor = barColor
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        window.isStatusBarContrastEnforced = false
+        window.isNavigationBarContrastEnforced = false
+      }
 
-      // 4. Atur icon status bar & navigation bar
+      // 3. Atur icon status bar & navigation bar
       val controller = WindowInsetsControllerCompat(window, window.decorView)
       controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_DEFAULT
       controller.isAppearanceLightStatusBars = !isDark
@@ -262,10 +309,10 @@ class MainActivity : TauriActivity() {
 put(join(root, 'res/values/colors.xml'), `<resources><color name="splash_background">#0F172A</color><color name="splash_icon_background">#0F172A</color></resources>
 `);
 
-put(join(root, 'res/values/themes.xml'), `<resources xmlns:tools="http://schemas.android.com/tools"><style name="Theme.prabawa" parent="Theme.Material3.DayNight.NoActionBar"><item name="android:windowLightStatusBar">true</item><item name="android:statusBarColor">#FFFFFF</item><item name="android:windowLightNavigationBar">true</item><item name="android:navigationBarColor">#FFFFFF</item><item name="android:windowBackground">#FFFFFF</item><item name="android:colorBackground">#FFFFFF</item><item name="android:windowActionModeOverlay">true</item><item name="android:windowNoTitle">true</item><item name="android:windowSplashScreenBackground">@color/splash_background</item><item name="android:windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item></style></resources>
+put(join(root, 'res/values/themes.xml'), `<resources xmlns:tools="http://schemas.android.com/tools"><style name="Theme.prabawa" parent="Theme.Material3.DayNight.NoActionBar"><item name="android:windowLightStatusBar">true</item><item name="android:statusBarColor">@android:color/transparent</item><item name="android:windowLightNavigationBar">true</item><item name="android:navigationBarColor">@android:color/transparent</item><item name="android:enforceStatusBarContrast" tools:targetApi="29">false</item><item name="android:enforceNavigationBarContrast" tools:targetApi="29">false</item><item name="android:windowBackground">@color/splash_background</item><item name="android:colorBackground">@color/splash_background</item><item name="android:windowActionModeOverlay">true</item><item name="android:windowNoTitle">true</item><item name="android:windowSplashScreenBackground">@color/splash_background</item><item name="android:windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item></style></resources>
 `);
 
-put(join(root, 'res/values-night/themes.xml'), `<resources xmlns:tools="http://schemas.android.com/tools"><style name="Theme.prabawa" parent="Theme.Material3.DayNight.NoActionBar"><item name="android:windowLightStatusBar">false</item><item name="android:statusBarColor">#0F172A</item><item name="android:windowLightNavigationBar">false</item><item name="android:navigationBarColor">#0F172A</item><item name="android:windowBackground">#0F172A</item><item name="android:colorBackground">#0F172A</item><item name="android:windowActionModeOverlay">true</item><item name="android:windowNoTitle">true</item><item name="android:windowSplashScreenBackground">@color/splash_background</item><item name="android:windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item></style></resources>
+put(join(root, 'res/values-night/themes.xml'), `<resources xmlns:tools="http://schemas.android.com/tools"><style name="Theme.prabawa" parent="Theme.Material3.DayNight.NoActionBar"><item name="android:windowLightStatusBar">false</item><item name="android:statusBarColor">@android:color/transparent</item><item name="android:windowLightNavigationBar">false</item><item name="android:navigationBarColor">@android:color/transparent</item><item name="android:enforceStatusBarContrast" tools:targetApi="29">false</item><item name="android:enforceNavigationBarContrast" tools:targetApi="29">false</item><item name="android:windowBackground">@color/splash_background</item><item name="android:colorBackground">@color/splash_background</item><item name="android:windowSplashScreenBackground">@color/splash_background</item><item name="android:windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item></style></resources>
 `);
 
 const gradle = join(process.cwd(), 'src-tauri/gen/android/app/build.gradle.kts');
