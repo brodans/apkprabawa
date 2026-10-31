@@ -123,27 +123,43 @@ export default function LoginScreen({ onLogin, onLoginStart, isDarkMode, toggleD
   });
 
   const [showPin, setShowPin] = useState(false);
+  const [passwordFocused, setPasswordFocused] = useState(false);
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [timeLeft, setTimeLeft] = useState(0);
   const authInFlight = useRef(false);
   const loginViewportRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const viewport = window.visualViewport;
+    let fullViewportHeight = viewport?.height ?? window.innerHeight;
+    let orientationFrame = 0;
     const updateLoginViewport = () => {
       const container = loginViewportRef.current;
       if (!container) return;
-      container.style.top = `${viewport?.offsetTop ?? 0}px`;
-      container.style.height = `${viewport?.height ?? window.innerHeight}px`;
+      const offsetTop = viewport?.offsetTop ?? 0;
+      const viewportHeight = viewport?.height ?? window.innerHeight;
+      container.style.top = `${offsetTop}px`;
+      container.style.height = `${viewportHeight}px`;
+      setKeyboardVisible(viewportHeight < fullViewportHeight - 120 || offsetTop > 24);
+    };
+    const resetViewportBaseline = () => {
+      orientationFrame = window.requestAnimationFrame(() => {
+        fullViewportHeight = viewport?.height ?? window.innerHeight;
+        updateLoginViewport();
+      });
     };
 
     updateLoginViewport();
     viewport?.addEventListener('resize', updateLoginViewport);
     viewport?.addEventListener('scroll', updateLoginViewport);
     window.addEventListener('resize', updateLoginViewport);
+    window.addEventListener('orientationchange', resetViewportBaseline);
     return () => {
       viewport?.removeEventListener('resize', updateLoginViewport);
       viewport?.removeEventListener('scroll', updateLoginViewport);
       window.removeEventListener('resize', updateLoginViewport);
+      window.removeEventListener('orientationchange', resetViewportBaseline);
+      window.cancelAnimationFrame(orientationFrame);
     };
   }, []);
 
@@ -393,7 +409,7 @@ export default function LoginScreen({ onLogin, onLoginStart, isDarkMode, toggleD
       </div>
 
       {/* ─── Kartu utama ───────────────────────────────────────────── */}
-      <div className="relative z-10 w-full max-w-[26rem] bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-700/60 rounded-[2rem] shadow-xl shadow-slate-900/10 dark:shadow-slate-950/50 overflow-hidden">
+      <div className={`relative z-10 w-full max-w-[26rem] ${passwordFocused && keyboardVisible ? 'translate-y-2' : ''} sm:translate-y-0 bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-700/60 rounded-[2rem] shadow-xl shadow-slate-900/10 dark:shadow-slate-950/50 overflow-hidden`}>
 
         <div className="px-8 pt-10 pb-6 text-center relative">
           <div className="relative inline-flex items-center justify-center w-20 h-20 mb-6 group">
@@ -494,6 +510,8 @@ export default function LoginScreen({ onLogin, onLoginStart, isDarkMode, toggleD
                     id="login-password"
                     type={showPin ? 'text' : 'password'}
                     value={state.pin}
+                    onFocus={() => setPasswordFocused(true)}
+                    onBlur={() => setPasswordFocused(false)}
                     disabled={isLocked || isAuthing}
                     onChange={event => dispatch({ type: 'SET_PIN', payload: event.target.value.replace(/\s/g, '') })}
                     className="block w-full pl-11 pr-12 py-3.5 bg-white/50 dark:bg-slate-950/50 border border-slate-200 dark:border-slate-800 rounded-xl text-base font-mono tracking-widest text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all disabled:opacity-50"

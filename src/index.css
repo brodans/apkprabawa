@@ -176,6 +176,18 @@
     min-height: 0 !important;
   }
 
+  /* Paint an opaque theme-matched strip behind Android's transparent nav bar. */
+  body.is-native .poni-workspace::after {
+    content: "";
+    position: absolute;
+    z-index: 39;
+    inset-inline: 0;
+    bottom: 0;
+    height: max(1.5rem, var(--poni-bawah, var(--sab, 24px)));
+    background-color: inherit;
+    pointer-events: none;
+  }
+
   /* The shared page scrollport must reserve the Android navigation-bar inset. */
   body.is-native .konten-gulir {
     padding-bottom: max(1.75rem, var(--poni-bawah, var(--sab, 0px))) !important;
