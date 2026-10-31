@@ -1,6 +1,19 @@
 import { useState, useEffect } from 'react';
 import { bacaStorage, tulisStorage } from '../lib/storageAman';
 
+/** Kirim tema ke Android (dipanggil bila jalan sebagai Tauri APK). */
+function syncThemeToAndroid(isDark: boolean) {
+  try {
+    // AndroidPrabawa diinjeksi oleh MainActivity.kt via addJavascriptInterface.
+    const bridge = (window as unknown as Record<string, unknown>).AndroidPrabawa as
+      | { setTheme?: (dark: boolean) => void }
+      | undefined;
+    bridge?.setTheme?.(isDark);
+  } catch {
+    // Bukan Android / bridge belum siap — abaikan.
+  }
+}
+
 export function useDarkMode() {
   /*
    * `bacaStorage`, bukan `localStorage.getItem` langsung.
@@ -37,6 +50,9 @@ export function useDarkMode() {
       tulisStorage('theme', 'light');
       if (metaThemeColor) metaThemeColor.setAttribute('content', '#ffffff');
     }
+
+    // Sinkronkan tema ke Android native (status bar / nav bar icons).
+    syncThemeToAndroid(isDarkMode);
   }, [isDarkMode]);
 
   const toggleDarkMode = () => setIsDarkMode(prev => !prev);

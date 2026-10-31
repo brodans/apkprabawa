@@ -60,42 +60,117 @@ const put = (file: string, content: string) => { mkdirSync(dirname(file), { recu
 const activity = join(root, 'java/id/go/jatim/prabawa/MainActivity.kt');
 put(activity, `package id.go.jatim.prabawa
 
+import android.content.res.Configuration
 import android.graphics.Color
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.View
+import android.view.ViewGroup
+import android.webkit.JavascriptInterface
+import android.webkit.WebView
 import androidx.activity.enableEdgeToEdge
+import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
-import androidx.core.view.ViewCompat
 import id.go.jatim.prabawa.TauriActivity
 
 class MainActivity : TauriActivity() {
+
+  /** Dipanggil dari JS saat Prabawa mengganti tema (dark/light). */
+  inner class PrabawaBridge {
+    @JavascriptInterface
+    fun setTheme(dark: Boolean) {
+      runOnUiThread { applySystemBarTheme(dark) }
+    }
+  }
+
+  private val mainHandler = Handler(Looper.getMainLooper())
+  private var bridgeInjected = false
+
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
 
-    // Edge-to-edge: konten web boleh menempel ke area sistem bar, tapi
-    // kita atur padding agar tidak tertutup status bar / navigation bar.
+    // Edge-to-edge: konten web boleh menempel ke area sistem bar.
     enableEdgeToEdge()
     WindowCompat.setDecorFitsSystemWindows(window, false)
 
-    val controller = WindowInsetsControllerCompat(window, window.decorView)
-    // Sistem bar tetap tampil sebagai overlay (disembunyikan saat sentuhan, muncul kembali saat swipe).
-    controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-
-    // Dark mode: ikon status bar & navigation bar putih di latar belakang gelap.
-    controller.isAppearanceLightStatusBars = false
-    controller.isAppearanceLightNavigationBars = false
-
+    // Status bar & navigation bar SELALU transparan.
     window.statusBarColor = Color.TRANSPARENT
     window.navigationBarColor = Color.TRANSPARENT
 
-    // Berikan padding pada root view agar konten web tidak ditutupi sistem bar.
+    // Padding otomatis agar konten web tidak tertutup system bar.
     ViewCompat.setOnApplyWindowInsetsListener(window.decorView) { _, insets ->
       val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
       window.decorView.setPadding(bars.left, bars.top, bars.right, bars.bottom)
       WindowInsetsCompat.CONSUMED
     }
+
+    // Terapkan tema awal dari system dark-mode setting.
+    val systemIsDark = (resources.configuration.uiMode and
+                        Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+    applySystemBarTheme(systemIsDark)
+  }
+
+  override fun onResume() {
+    super.onResume()
+    // Injeksi JS bridge ke WebView Tauri. Tauri membuat WebView secara async
+    // di thread Rust/JNI, sehingga kita tunggu sebentar sebelum mencarinya.
+    if (!bridgeInjected) {
+      mainHandler.postDelayed({ injectBridge() }, 600)
+    }
+  }
+
+  private fun injectBridge() {
+    val wv = findWebView(window.decorView) ?: return
+    wv.addJavascriptInterface(PrabawaBridge(), "AndroidPrabawa")
+    bridgeInjected = true
+    // Baca tema tersimpan Prabawa dari localStorage dan sinkronkan status bar.
+    wv.evaluateJavascript(
+      "(function(){ try { return localStorage.getItem('theme') || ''; } catch(e){ return ''; } })()"
+    ) { result ->
+      val tema = result?.trim('"') ?: ""
+      runOnUiThread {
+        // Jika localStorage belum ada / kosong, pakai system dark mode.
+        val systemIsDark = (resources.configuration.uiMode and
+                            Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+        applySystemBarTheme(if (tema == "dark") true else if (tema == "light") false else systemIsDark)
+      }
+    }
+  }
+
+  /** Cari WebView di view hierarchy secara rekursif. */
+  private fun findWebView(view: View): WebView? {
+    if (view is WebView) return view
+    if (view is ViewGroup) {
+      for (i in 0 until view.childCount) {
+        val found = findWebView(view.getChildAt(i))
+        if (found != null) return found
+      }
+    }
+    return null
+  }
+
+  override fun onConfigurationChanged(newConfig: Configuration) {
+    super.onConfigurationChanged(newConfig)
+    val isDark = (newConfig.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+    applySystemBarTheme(isDark)
+  }
+
+  /**
+   * Terapkan warna ikon status bar & nav bar sesuai tema.
+   *
+   * Light mode: isAppearanceLightStatusBars = true  → ikon gelap (hitam), terlihat di bg terang
+   * Dark mode:  isAppearanceLightStatusBars = false → ikon terang (putih), terlihat di bg gelap
+   *
+   * BEHAVIOR_DEFAULT: sistem bar SELALU tampil, tidak pernah auto-hide.
+   */
+  private fun applySystemBarTheme(isDark: Boolean) {
+    val controller = WindowInsetsControllerCompat(window, window.decorView)
+    controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_DEFAULT
+    controller.isAppearanceLightStatusBars = !isDark
+    controller.isAppearanceLightNavigationBars = !isDark
   }
 }
 `);

@@ -17,6 +17,12 @@
  *
  *  Berkas ini adalah SUMBER, bukan artefak.
  * Dibangun oleh `src/serverless/build.mts` menjadi `api/ep.js`.
+ *
+ * Cookie SameSite:
+ * - Browser biasa: SameSite=Lax (aman)
+ * - Tauri APK (tauri.localhost): SameSite=None karena request bersifat
+ *   cross-site ke prabawa.vercel.app; tanpanya cookie sesi captcha tidak
+ *   ikut pada POST login sehingga login selalu gagal di APK.
  */
 
 import type { IncomingMessage, ServerResponse } from 'node:http';
@@ -83,20 +89,40 @@ function rewriteLocation(loc: string): string {
  * Tulis ulang Set-Cookie:
  * - Buang Domain (agar cookie tersimpan di domain Vercel, bukan domain upstream)
  * - Sesuaikan Path ke /ep
- * - Di production (HTTPS): pastikan Secure ada, tambah SameSite=Lax
+ * - Di production (HTTPS): pastikan Secure ada
+ *   - Origin Tauri APK (tauri.localhost / tauri://localhost): SameSite=None
+ *     karena request dari APK bersifat cross-site ke Vercel, SameSite=Lax
+ *     akan memblokir cookie pada POST login dan menyebabkan kegagalan sesi.
+ *   - Origin lainnya: SameSite=Lax (aman untuk browser biasa)
  * - Di dev lokal (HTTP): hapus Secure agar browser mau menyimpan di localhost
  */
-function rewriteSetCookie(cookies: string | string[]): string[] {
+const TAURI_ORIGINS = new Set([
+  'tauri://localhost',
+  'http://tauri.localhost',
+  'https://tauri.localhost',
+]);
+
+function rewriteSetCookie(cookies: string | string[], origin: string): string[] {
   const isProd = Boolean(process.env.VERCEL || process.env.VERCEL_ENV);
+  const isTauri = TAURI_ORIGINS.has(origin);
   const list = Array.isArray(cookies) ? cookies : [cookies];
   return list.map((cookie) => {
     let c = cookie
       .replace(/;\s*domain=[^;]*/gi, '')
       .replace(/;\s*path=[^;]*/gi, '; Path=/ep');
     if (isProd) {
-      // Production (Vercel HTTPS): Secure wajib, SameSite=Lax agar cookie ikut
+      // Production (Vercel HTTPS): Secure wajib di semua kasus.
       if (!/;\s*secure/i.test(c)) c += '; Secure';
-      if (!/;\s*samesite=/i.test(c)) c += '; SameSite=Lax';
+      // Hapus SameSite yang sudah ada agar bisa diganti dengan tepat.
+      c = c.replace(/;\s*samesite=[^;]*/gi, '');
+      if (isTauri) {
+        // Tauri APK: cross-site request dari tauri.localhost ke prabawa.vercel.app.
+        // SameSite=None diperlukan agar cookie sesi captcha ikut serta pada POST login.
+        c += '; SameSite=None';
+      } else {
+        // Browser biasa: SameSite=Lax cukup aman.
+        c += '; SameSite=Lax';
+      }
     } else {
       // Dev lokal (HTTP): hapus Secure agar browser simpan di localhost
       c = c.replace(/;\s*secure/gi, '');
@@ -300,7 +326,7 @@ export default async function handler(req: IncomingMessage & { url?: string; met
     if (key.toLowerCase() === 'location') {
       res.setHeader('Location', rewriteLocation(value));
     } else if (key.toLowerCase() === 'set-cookie') {
-      const rewritten = rewriteSetCookie(value);
+      const rewritten = rewriteSetCookie(value, origin);
       for (const cookie of rewritten) {
         res.appendHeader('Set-Cookie', cookie);
       }
