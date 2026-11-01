@@ -37,6 +37,7 @@ jobs:
       - name: Package Arch Linux archive
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ZSTD_CLEVEL: '19'
         run: |
           set -euo pipefail
           deb_file="$(find src-tauri/target/release/bundle/deb -maxdepth 1 -type f -name '*.deb' -print -quit)"
