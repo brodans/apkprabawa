@@ -13,6 +13,7 @@ interface AndroidPrabawaInterface {
   startForegroundService?: (title?: string, content?: string) => void;
   stopForegroundService?: () => void;
   showNotification?: (title: string, message: string) => boolean;
+  isIgnoringBatteryOptimizations?: () => boolean;
   requestBatteryOptimizationExemption?: () => void;
 }
 
@@ -79,5 +80,14 @@ export function requestAndroidBatteryOptimization(): void {
     getAndroidBridge()?.requestBatteryOptimizationExemption?.();
   } catch (err) {
     console.warn('[AndroidBridge] Gagal meminta izin optimasi baterai:', err);
+  }
+}
+
+/** Periksa apakah Android sudah mengecualikan aplikasi dari optimasi baterai. */
+export function androidBatteryOptimizationDiizinkan(): boolean {
+  try {
+    return getAndroidBridge()?.isIgnoringBatteryOptimizations?.() ?? false;
+  } catch {
+    return false;
   }
 }

@@ -17,7 +17,8 @@ import { Field, Input, ActionButton } from './ui/Surface';
 import Dropdown from './ui/Dropdown';
 import type { PresetOtomatisasi, TipePreset, HariKerja } from '../lib/presetOtomatisasi';
 import { LABEL_HARI, URUTAN_HARI } from '../lib/presetOtomatisasi';
-import type { LokasiView, WorkCodeView } from '../lib/viewModels';
+import type { TitikAbsen } from '../lib/lokasiTersimpan';
+import type { WorkCodeView } from '../lib/viewModels';
 
 // ═══════════════════════════════════════════════════════════════════════
 //  Props
@@ -32,8 +33,8 @@ export interface PresetFormModalProps {
   onSimpan: (data: Omit<PresetOtomatisasi, 'id' | 'dibuatPada' | 'diperbarui'>) => void;
   /** Preset yang diedit. null = mode tambah baru. */
   preset?: PresetOtomatisasi | null;
-  /** Daftar lokasi dari server. */
-  lokasis: LokasiView[];
+  /** Daftar lokasi milik akun dari IndexedDB. */
+  lokasiTersimpan: TitikAbsen[];
   /** Daftar workcode dari server. */
   workcodes: WorkCodeView[];
 }
@@ -85,7 +86,7 @@ export default function PresetFormModal({
   onTutup,
   onSimpan,
   preset,
-  lokasis,
+  lokasiTersimpan,
   workcodes,
 }: PresetFormModalProps) {
   const modeEdit = preset != null;
@@ -146,13 +147,13 @@ export default function PresetFormModal({
   /** Lokasi yang tersaring oleh kata kunci pencarian. */
   const lokasiFiltrat = useMemo(() => {
     const q = cariLokasi.trim().toLowerCase();
-    if (!q) return lokasis;
-    return lokasis.filter(
-      l =>
-        l.nama.toLowerCase().includes(q) ||
-        l.kode.toLowerCase().includes(q)
+    if (!q) return lokasiTersimpan;
+    return lokasiTersimpan.filter(
+      lokasi =>
+        lokasi.nama.toLowerCase().includes(q) ||
+        `${lokasi.latitude},${lokasi.longitude}`.includes(q)
     );
-  }, [lokasis, cariLokasi]);
+  }, [lokasiTersimpan, cariLokasi]);
 
   /** Opsi dropdown workcode. id dikonversi ke string karena OpsiDropdown.value = string. */
   const opsiWorkcode = useMemo(
@@ -346,7 +347,7 @@ export default function PresetFormModal({
           <div className="max-h-44 overflow-y-auto custom-scrollbar rounded-xl border border-slate-200 dark:border-slate-700 divide-y divide-slate-100 dark:divide-slate-700/60">
             {lokasiFiltrat.length === 0 ? (
               <p className="py-6 text-center text-xs text-slate-400">
-                {cariLokasi ? 'Tidak ada lokasi yang cocok.' : 'Belum ada data lokasi.'}
+                {cariLokasi ? 'Tidak ada lokasi yang cocok.' : 'Belum ada lokasi tersimpan di perangkat.'}
               </p>
             ) : (
               lokasiFiltrat.map(lokasi => {
@@ -393,8 +394,7 @@ export default function PresetFormModal({
                         {lokasi.nama}
                       </span>
                       <span className="block text-[10px] text-slate-400 dark:text-slate-500">
-                        {lokasi.kode}
-                        {lokasi.radius ? ` · r=${lokasi.radius}m` : ''}
+                        {lokasi.latitude}, {lokasi.longitude}
                       </span>
                     </span>
                   </button>

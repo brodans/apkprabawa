@@ -30,8 +30,8 @@ import {
 import { getTodayWIB, getNowWIBTime } from '../lib/dateFormatter';
 import { rpcAbsen } from '../lib/apiCalls';
 import { ABSEN_CHECK_TYPE, formatLatLong } from '../lib/presensiContract';
-import type { LokasiView } from '../lib/viewModels';
 import type { ServerContext } from '../lib/apiCalls';
+import { bacaTitik } from '../lib/lokasiTersimpan';
 import {
   showAndroidNotification,
   startAndroidForegroundService,
@@ -51,8 +51,6 @@ const INTERVAL_MS = 30_000; // 30 detik
 export interface UseAutoPresensiOptions {
   /** Daftar preset yang akan diperiksa. */
   presets: PresetOtomatisasi[];
-  /** Daftar lokasi dari server (untuk verifikasi keberadaan id). */
-  lokasis: LokasiView[];
   /** Bila false, polling tidak berjalan. */
   aktif: boolean;
   /** Callback opsional setelah eksekusi preset berhasil. */
@@ -137,7 +135,6 @@ function checkTypeFromTipe(tipe: PresetOtomatisasi['tipe']): number {
  */
 async function cekDanEksekusiPreset(
   presets: PresetOtomatisasi[],
-  lokasis: LokasiView[],
   username: string,
   context: ServerContext,
   onEksekusi?: (preset: PresetOtomatisasi, lokasiId: string) => void,
@@ -145,6 +142,7 @@ async function cekDanEksekusiPreset(
   const jamSekarang = getNowWIBTime();
   const tanggalHariIni = getTodayWIB();
   const hariSekarang = new Date().getDay();
+  const lokasiTersimpan = await bacaTitik(username);
 
   for (const preset of presets) {
     if (!preset.aktif) continue;
@@ -154,8 +152,8 @@ async function cekDanEksekusiPreset(
     const sudahEksekusi = await sudahDieksekusiHariIni(username, preset.id, tanggalHariIni);
     if (sudahEksekusi) continue;
 
-    // Saring pool lokasi preset ke yang benar-benar ada di server.
-    const lokasiValid = preset.lokasiIds.filter(id => lokasis.some(l => l.id === id));
+    // Abaikan lokasi yang sudah dihapus dari penyimpanan lokal.
+    const lokasiValid = preset.lokasiIds.filter(id => lokasiTersimpan.some(lokasi => lokasi.id === id));
     const lokasiId = pilihLokasiAcak(lokasiValid);
 
     if (!lokasiId) {
@@ -175,10 +173,10 @@ async function cekDanEksekusiPreset(
     }
 
     // Cari koordinat lokasi yang dipilih untuk disertakan di context.
-    const lokasi = lokasis.find(l => l.id === lokasiId);
+    const lokasi = lokasiTersimpan.find(item => item.id === lokasiId);
 
     let ctxDenganLokasi: ServerContext = context;
-    if (lokasi && lokasi.latitude !== null && lokasi.longitude !== null) {
+    if (lokasi) {
       ctxDenganLokasi = {
         ...context,
         lastLatLong: formatLatLong(lokasi.latitude, lokasi.longitude),
@@ -213,7 +211,7 @@ async function cekDanEksekusiPreset(
 
       await kirimNotifikasiNative(
         '✅ Presensi Otomatis Berhasil',
-        `${preset.nama} — ${lokasi?.nama ?? lokasi?.kode ?? lokasiId}`
+        `${preset.nama} — ${lokasi?.nama ?? lokasiId}`
       );
 
       onEksekusi?.(preset, lokasiId);
@@ -242,7 +240,6 @@ async function cekDanEksekusiPreset(
 
 export function useAutoPresensi({
   presets,
-  lokasis,
   aktif,
   onEksekusi,
 }: UseAutoPresensiOptions): void {
@@ -256,13 +253,11 @@ export function useAutoPresensi({
    * menangkap nilai lama (stale closure).
    */
   const presetsRef = useRef(presets);
-  const lokasisRef = useRef(lokasis);
   const contextRef = useRef(context);
   const onEksekusiRef = useRef(onEksekusi);
 
   // Perbarui ref setiap render supaya interval selalu pakai data terbaru.
   useEffect(() => { presetsRef.current = presets; }, [presets]);
-  useEffect(() => { lokasisRef.current = lokasis; }, [lokasis]);
   useEffect(() => { contextRef.current = context; }, [context]);
   useEffect(() => { onEksekusiRef.current = onEksekusi; }, [onEksekusi]);
 
@@ -284,7 +279,6 @@ export function useAutoPresensi({
       try {
         await cekDanEksekusiPreset(
           presetsRef.current,
-          lokasisRef.current,
           username,
           contextRef.current,
           onEksekusiRef.current,

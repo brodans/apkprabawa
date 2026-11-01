@@ -209,6 +209,13 @@ class MainActivity : TauriActivity() {
         }
       }
     }
+
+    @JavascriptInterface
+    fun isIgnoringBatteryOptimizations(): Boolean {
+      if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return true
+      val pm = getSystemService(android.content.Context.POWER_SERVICE) as? android.os.PowerManager
+      return pm?.isIgnoringBatteryOptimizations(packageName) == true
+    }
   }
 
   private val mainHandler = Handler(Looper.getMainLooper())

@@ -24,7 +24,6 @@ import {
   PageHeader,
   Card,
   Badge,
-  Alert,
   EmptyState,
   SkeletonList,
   ActionButton,
@@ -41,9 +40,10 @@ import {
   type LogEksekusi,
 } from '../lib/presetOtomatisasi';
 import { getTodayWIB } from '../lib/dateFormatter';
-import { rpcGetLokasiAbsen, rpcGetWorkCode } from '../lib/apiCalls';
+import { rpcGetWorkCode } from '../lib/apiCalls';
 import { useAppContext } from '../context/AppContext';
-import type { LokasiView, WorkCodeView } from '../lib/viewModels';
+import type { WorkCodeView } from '../lib/viewModels';
+import { bacaTitik, type TitikAbsen } from '../lib/lokasiTersimpan';
 import {
   getPenjadwalAktifStorage,
   setPenjadwalAktifStorage,
@@ -51,6 +51,7 @@ import {
 } from '../components/GlobalPresetScheduler';
 import {
   isAndroidPrabawa,
+  androidBatteryOptimizationDiizinkan,
   requestAndroidBatteryOptimization,
 } from '../lib/androidBackgroundBridge';
 
@@ -204,9 +205,12 @@ export default function PagePresetOtomatisasi() {
   const username = currentUser?.username ?? '';
 
   // ── State data dari server ──
-  const [lokasis, setLokasis] = useState<LokasiView[]>([]);
+  const [lokasiTersimpan, setLokasiTersimpan] = useState<TitikAbsen[]>([]);
   const [workcodes, setWorkcodes] = useState<WorkCodeView[]>([]);
   const [memuatData, setMemuatData] = useState(true);
+  const [izinOptimasiBaterai, setIzinOptimasiBaterai] = useState(
+    () => isAndroidPrabawa() && androidBatteryOptimizationDiizinkan()
+  );
   const [logsHarian, setLogsHarian] = useState<LogEksekusi[]>([]);
 
   // ── Hook preset ──
@@ -235,12 +239,12 @@ export default function PagePresetOtomatisasi() {
     setMemuatData(true);
     void (async () => {
       try {
-        const [lok, wc] = await Promise.all([
-          rpcGetLokasiAbsen(context),
+        const [titik, wc] = await Promise.all([
+          bacaTitik(username),
           rpcGetWorkCode(context),
         ]);
         if (!hidup) return;
-        setLokasis(lok);
+        setLokasiTersimpan(titik);
         setWorkcodes(wc);
       } catch {
         if (!hidup) return;
@@ -250,7 +254,22 @@ export default function PagePresetOtomatisasi() {
       }
     })();
     return () => { hidup = false; };
-  }, [ready, context, toast]);
+  }, [ready, context, toast, username]);
+
+  useEffect(() => {
+    if (!isAndroidPrabawa()) return;
+    const periksaIzin = () => setIzinOptimasiBaterai(androidBatteryOptimizationDiizinkan());
+    const saatKembali = () => {
+      if (document.visibilityState === 'visible') periksaIzin();
+    };
+    periksaIzin();
+    window.addEventListener('focus', periksaIzin);
+    document.addEventListener('visibilitychange', saatKembali);
+    return () => {
+      window.removeEventListener('focus', periksaIzin);
+      document.removeEventListener('visibilitychange', saatKembali);
+    };
+  }, []);
 
   // ── Muat log harian (async IndexedDB) ──
   const muatLogsHarian = useCallback(async () => {
@@ -341,12 +360,6 @@ export default function PagePresetOtomatisasi() {
         }
       />
 
-      {/* ── Info singkat fitur ── */}
-      <Alert tone="blue">
-        Fitur ini akan otomatis melakukan presensi sesuai jadwal yang ditentukan. Lokasi dipilih
-        secara acak dari pool yang kamu pilih — pastikan semua lokasi dalam pool valid.
-      </Alert>
-
       {/* ── Status penjadwal ── */}
       <Card padded={false} className="px-4 py-3">
         <div className="flex items-center justify-between gap-3">
@@ -395,17 +408,17 @@ export default function PagePresetOtomatisasi() {
       </Card>
 
       {/* ── Banner optimasi baterai (khusus Android WebView) ── */}
-      {isAndroidPrabawa() && (
+      {isAndroidPrabawa() && !izinOptimasiBaterai && (
         <Card padded={false} className="p-4 bg-blue-50/70 dark:bg-blue-950/20 border-blue-200/70 dark:border-blue-900/40">
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-start gap-3">
               <ShieldCheck className="w-5 h-5 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
               <div className="space-y-0.5 min-w-0">
                 <p className="text-xs font-bold text-blue-900 dark:text-blue-200">
-                  Layanan Latar Belakang Android (Tahan Kill)
+                  Layanan latar belakang
                 </p>
                 <p className="text-[11px] text-blue-700/80 dark:text-blue-300/80 leading-relaxed">
-                  Agar presensi otomatis tetap berjalan saat layar mati atau aplikasi di latar belakang, izinkan aplikasi mengabaikan penghemat baterai (Doze mode).
+                  Izinkan agar penjadwal tetap berjalan.
                 </p>
               </div>
             </div>
@@ -452,7 +465,7 @@ export default function PagePresetOtomatisasi() {
         onTutup={tutupModal}
         onSimpan={handleSimpan}
         preset={presetDiedit}
-        lokasis={lokasis}
+        lokasiTersimpan={lokasiTersimpan}
         workcodes={workcodes}
       />
 

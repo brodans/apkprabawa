@@ -17,9 +17,7 @@ import {
   bacaSemuaPreset,
   type PresetOtomatisasi,
 } from '../lib/presetOtomatisasi';
-import { rpcGetLokasiAbsen } from '../lib/apiCalls';
 import { bacaStorage, tulisStorage } from '../lib/storageAman';
-import type { LokasiView } from '../lib/viewModels';
 
 const KUNCI_STORAGE_PENJADWAL = 'prabawa_penjadwal_otomatis_aktif';
 
@@ -45,11 +43,10 @@ export function notifyPresetUpdated(): void {
 
 export default function GlobalPresetScheduler() {
   const { currentUser, pegawai } = useAppContext();
-  const { context, ready } = useServerContext();
+  const { ready } = useServerContext();
 
   const username = currentUser?.username ?? '';
   const [presets, setPresets] = useState<PresetOtomatisasi[]>([]);
-  const [lokasis, setLokasis] = useState<LokasiView[]>([]);
   const [penjadwalAktif, setPenjadwalAktif] = useState<boolean>(() => getPenjadwalAktifStorage());
 
   // Muat preset dari IndexedDB
@@ -66,25 +63,10 @@ export default function GlobalPresetScheduler() {
     }
   }, [username]);
 
-  // Muat lokasi absen dari server untuk validasi pool
-  const muatLokasi = useCallback(async () => {
-    if (!ready || !pegawai) return;
-    try {
-      const data = await rpcGetLokasiAbsen(context);
-      setLokasis(data);
-    } catch {
-      // Diam-diam, akan dicoba lagi saat server siap
-    }
-  }, [context, ready, pegawai]);
-
-  // Muat data saat username atau server siap
+  // Muat preset saat username berubah.
   useEffect(() => {
     void muatPreset();
   }, [muatPreset]);
-
-  useEffect(() => {
-    void muatLokasi();
-  }, [muatLokasi]);
 
   // Dengarkan event pembaruan dari halaman PresetOtomatisasi
   useEffect(() => {
@@ -109,7 +91,6 @@ export default function GlobalPresetScheduler() {
   // Jalankan scheduler latar belakang dengan notifikasi native
   useAutoPresensi({
     presets,
-    lokasis,
     aktif: penjadwalAktif && ready && !!username && !!pegawai,
   });
 
