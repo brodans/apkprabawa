@@ -61,7 +61,6 @@ jobs:
             --depends webkit2gtk-4.1 \
             --depends openssl \
             --depends libnotify \
-            --compression zstd \
             --package "${package_file}" \
             "${deb_file}"
           test -s "${package_file}"
