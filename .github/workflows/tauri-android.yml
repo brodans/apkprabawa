@@ -52,7 +52,21 @@ jobs:
           packages: ''
           accept-android-sdk-licenses: false
       - name: Install Android platform
-        run: sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0" "ndk;27.0.12077973"
+        shell: bash
+        run: |
+          set -euo pipefail
+          packages=("platform-tools" "platforms;android-35" "build-tools;35.0.0" "ndk;27.0.12077973")
+          for attempt in 1 2 3; do
+            echo "Installing Android SDK packages (attempt ${attempt}/3)..."
+            if sdkmanager --sdk_root="${ANDROID_HOME}" "${packages[@]}"; then
+              exit 0
+            fi
+            if [[ "${attempt}" -lt 3 ]]; then
+              echo "::warning::sdkmanager failed; clearing partial downloads before retry."
+              rm -rf "${ANDROID_HOME}/temp" "${HOME}/.android/cache"
+            fi
+          done
+          exit 1
       - run: npm ci
       - name: Initialize Android project
         run: npm run tauri:android:init
