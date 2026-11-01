@@ -78,9 +78,7 @@ async function kirimNotifikasiNative(judul: string, isi: string): Promise<void> 
   // 2. Tauri Plugin Notification (AppImage & Desktop)
   try {
     // Dynamic import — berjalan hanya di runtime Tauri, tidak melempar di browser biasa.
-    // ts-expect-error hanya aktif bila plugin belum di-install di node_modules.
     const { sendNotification, isPermissionGranted, requestPermission } =
-      // @ts-expect-error — plugin diinstal saat runtime Tauri
       await import('@tauri-apps/plugin-notification');
 
     let permitted: boolean = await isPermissionGranted();
