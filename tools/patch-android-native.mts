@@ -101,11 +101,24 @@ class MainActivity : TauriActivity() {
   inner class PrabawaBridge {
     @JavascriptInterface
     fun setTheme(dark: Boolean) {
-      mainHandler.post { applySystemBarTheme(dark) }
+      mainHandler.post {
+        appThemeIsDark = dark
+        applySystemBarTheme()
+      }
+    }
+
+    @JavascriptInterface
+    fun setOverlayMode(active: Boolean) {
+      mainHandler.post {
+        overlayDarkMode = active
+        applySystemBarTheme()
+      }
     }
   }
 
   private val mainHandler = Handler(Looper.getMainLooper())
+  private var appThemeIsDark = false
+  private var overlayDarkMode = false
   private var bridgeInjected = false
   private var checkAttempts = 0
   private val maxCheckAttempts = 30 // Coba selama 6 detik (30 x 200ms)
@@ -129,7 +142,8 @@ class MainActivity : TauriActivity() {
     // Terapkan tema awal dari setting sistem Android
     val systemIsDark = (resources.configuration.uiMode and
                         Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
-    applySystemBarTheme(systemIsDark)
+    appThemeIsDark = systemIsDark
+    applySystemBarTheme()
 
     // Tangkap insets dan teruskan ukuran status bar & nav bar ke CSS variables di WebView
     // persis seperti SystemBars di Mesen.Ae-Capacitor
@@ -263,9 +277,11 @@ class MainActivity : TauriActivity() {
 
     wv.evaluateJavascript(checkScript) { result ->
       if (result?.contains("dark") == true) {
-        applySystemBarTheme(true)
+        appThemeIsDark = true
+        applySystemBarTheme()
       } else if (result?.contains("light") == true) {
-        applySystemBarTheme(false)
+        appThemeIsDark = false
+        applySystemBarTheme()
       }
     }
   }
@@ -290,8 +306,8 @@ class MainActivity : TauriActivity() {
       val insets = cachedInsets ?: ViewCompat.getRootWindowInsets(window.decorView)
       if (insets != null) sendInsetsToWeb(insets, wv)
     } else {
-      val isDark = (newConfig.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
-      applySystemBarTheme(isDark)
+      appThemeIsDark = (newConfig.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+      applySystemBarTheme()
     }
   }
 
@@ -309,8 +325,9 @@ class MainActivity : TauriActivity() {
    *
   * Warna ikon kedua bar tetap mengikuti tema aktif untuk light maupun dark mode.
    */
-  private fun applySystemBarTheme(isDark: Boolean) {
+  private fun applySystemBarTheme() {
     runOnUiThread {
+      val isDark = appThemeIsDark || overlayDarkMode
       val workspaceColor = if (isDark) Color.parseColor("#0B1120") else Color.parseColor("#F8FAFC")
 
       // Kedua system bar transparan; safe-area CSS menjaga konten di atasnya.

@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Download, ChevronLeft, ChevronRight } from 'lucide-react';
+import { acquireAndroidDarkSystemBars } from '../../lib/androidSystemBars';
 
 interface ImageItem {
   src: string;
@@ -51,6 +52,11 @@ export default function ImageLightbox({
   useEffect(() => {
     setIsMounted(true);
   }, []);
+
+  useEffect(() => {
+    if (!isMounted) return;
+    return acquireAndroidDarkSystemBars();
+  }, [isMounted]);
 
   // Synchronize localIndex with props
   useEffect(() => {

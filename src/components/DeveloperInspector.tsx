@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Check, ChevronDown, ChevronUp, Clipboard, Code2, Download, Eraser, X, Zap } from 'lucide-react';
 import { ApiTrafficEntry, subscribeToApiTraffic } from '../api';
 import { BP_INSPECTOR_SIDEBAR, useMediaQuery } from '../hooks/useMediaQuery';
+import { acquireAndroidDarkSystemBars } from '../lib/androidSystemBars';
 
 const formatPayload = (value: unknown) => {
   if (value === undefined || value === null) return 'null';
@@ -75,6 +76,11 @@ export default function DeveloperInspector({
       unsubscribe();
     };
   }, []);
+
+  useEffect(() => {
+    if (!enabled || layarLebar || !mobileOpen) return;
+    return acquireAndroidDarkSystemBars();
+  }, [enabled, layarLebar, mobileOpen]);
 
   // Buka drawer otomatis di layar sempit.
   useEffect(() => {
