@@ -309,8 +309,8 @@ const aged = (ms: number): void =>
   );
 
 reset();
-aged(31 * 60 * 1000);
-cek('sesi lewat 30 menit ditolak', SM.loadSession() === null);
+aged(SM.SESSION_TIMEOUT_MS + 60_000);
+cek('sesi lewat masa berlaku ditolak', SM.loadSession() === null);
 cek('sesi kedaluwarsa dihapus dari storage', sesiTersimpan().length === 0);
 
 reset();

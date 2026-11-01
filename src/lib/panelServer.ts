@@ -98,16 +98,16 @@ const COLL_TAGIHAN = 'jatim_tagihan';
 const BATAS_AKUN_PANEL = 1000;
 const DOC_AUTH = 'auth';
 
-/** Umur token. 30 menit  sama dengan idle timeout yang sudah ada sebelumnya. */
-const TOKEN_TTL_MS = 30 * 60 * 1000;
+/** Umur token. 1 tahun — mode perangkat tepercaya (Tauri & Android). */
+const TOKEN_TTL_MS = 365 * 24 * 60 * 60 * 1000;
 
 /**
  * Ambang perpanjangan.
  *
- * `/verify` menerbitkan token baru kalau sisa umur di bawah ini, jadi klien
+ * `/verify` menerbitkan token baru kalau sisa umur di bawah 30 hari, jadi klien
  * tidak perlu memanggil server terus-menerus hanya untuk memperpanjang.
  */
-const PERBARU_BILA_SISA_MS = 10 * 60 * 1000;
+const PERBARU_BILA_SISA_MS = 30 * 24 * 60 * 60 * 1000;
 
 /** Versi bentuk token. Dinaikkan kalau bentuk payload berubah. */
 const TOKEN_V = 1;

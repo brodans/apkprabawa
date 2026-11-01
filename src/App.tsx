@@ -17,6 +17,7 @@ import {
   Sun,
   UserCog,
   X,
+  Zap,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useDarkMode } from './hooks/useDarkMode';
@@ -32,6 +33,7 @@ import DeveloperInspector from './components/DeveloperInspector';
 import BannerKontrakServer from './components/BannerKontrakServer';
 import BannerServerPusat from './components/BannerServerPusat';
 import GerbangLangganan from './components/GerbangLangganan';
+import GlobalPresetScheduler from './components/GlobalPresetScheduler';
 import {
   mulaiAutoLogin,
   resetAutoLogin,
@@ -65,6 +67,7 @@ const pageImporters = {
   tabLokasiAbsen: () => import('./pages/LokasiAbsen'),
   tabManajemenAkun: () => import('./pages/ManajemenAkun'),
   tabWeb: () => import('./pages/WebPresensi'),
+  tabPresetOtomatisasi: () => import('./pages/PresetOtomatisasi'),
 } satisfies Record<string, () => Promise<PageModule>>;
 
 const pageModuleCache = new Map<string, Promise<PageModule>>();
@@ -96,6 +99,7 @@ const Laporan = lazyPage('tabLaporan');
 const LokasiAbsen = lazyPage('tabLokasiAbsen');
 const ManajemenAkun = lazyPage('tabManajemenAkun');
 const WebPresensi = lazyPage('tabWeb');
+const PresetOtomatisasi = lazyPage('tabPresetOtomatisasi');
 
 // ═══════════════════════════════════════════════════════════════════════
 //  Daftar halaman & navigasi
@@ -116,6 +120,7 @@ const PAGES: PageDefinition[] = [
   { id: 'tabPerizinan', icon: FileCheck, label: 'Perizinan', component: Perizinan, path: PAGE_PATHS.tabPerizinan, group: 'utama' },
   { id: 'tabLaporan', icon: FileText, label: 'Laporan', component: Laporan, path: PAGE_PATHS.tabLaporan, group: 'utama' },
   { id: 'tabLokasiAbsen', icon: MapPin, label: 'Lokasi Absen', component: LokasiAbsen, path: PAGE_PATHS.tabLokasiAbsen, group: 'utama' },
+  { id: 'tabPresetOtomatisasi', icon: Zap, label: 'Preset Auto', component: PresetOtomatisasi, path: PAGE_PATHS.tabPresetOtomatisasi, group: 'utama' },
   { id: 'tabWeb', icon: Globe, label: 'WEB', component: WebPresensi, path: PAGE_PATHS.tabWeb, group: 'utama' },
   // ⚠️ Manajemen Akun hanya untuk admin. Diperiksa dua kali: di
   // `visiblePages` (role) dan di `tabPermissions.tabManajemenAkun`, yang
@@ -463,6 +468,22 @@ function PageLoading({ pageId }: { pageId: string }) {
           </div>
         </div>
       </>
+    );
+  } else if (pageId === 'tabPresetOtomatisasi') {
+    content = (
+      <div className="space-y-4">
+        <div className="rounded-2xl border border-slate-200/70 bg-white p-5 dark:border-slate-700/60 dark:bg-slate-800/60 sm:p-6">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <Skeleton className="h-11 w-11 shrink-0 rounded-2xl" />
+              <div className="space-y-2"><Skeleton className="h-5 w-40" /><Skeleton className="h-3 w-28" /></div>
+            </div>
+            <Skeleton className="h-9 w-32 rounded-xl" />
+          </div>
+          <Skeleton className="mb-4 h-10 w-full rounded-xl" />
+          <SkeletonList rows={3} />
+        </div>
+      </div>
     );
   } else if (pageId === 'tabLokasiAbsen') {
     content = (
@@ -1833,6 +1854,7 @@ function AppShell({ isDarkMode, toggleDarkMode }: { isDarkMode: boolean; toggleD
             fallbackLoading={null}
             onLoadingChange={setGerbangMemuat}
           >
+            <GlobalPresetScheduler />
             <MainApp onLogout={handleLogout} isDarkMode={isDarkMode} toggleDarkMode={toggleDarkMode} />
           </GerbangLangganan>
         </motion.div>

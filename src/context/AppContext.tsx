@@ -24,7 +24,7 @@ import {
 } from '../lib/sessionManager';
 import { resetAutoLogin, sudahKeluarServer } from '../lib/serverAutoLogin';
 import { bacaStorage, tulisStorage } from '../lib/storageAman';
-import { verifikasiSesiPanel } from '../lib/akunFirestore';
+import { PanelAuthError, verifikasiSesiPanel } from '../lib/akunFirestore';
 import { migrasiTitikUsernameLokal } from '../lib/lokasiTersimpan';
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -281,6 +281,7 @@ const PATH_MAP: Record<string, string> = {
   tabLokasiAbsen: '/lokasi-absen',
   tabManajemenAkun: '/manajemen-akun',
   tabWeb: '/web',
+  tabPresetOtomatisasi: '/preset-otomatisasi',
 };
 
 const FALLBACK_PAGE = 'tabBeranda';
@@ -412,14 +413,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setServerAutoLoginPending(!sudahKeluarServer(hasil.akun.username));
         // Perpanjangan token disimpan tanpa mengganti akun.
         if (hasil.tokenBaru) perbaruiTokenSesi(hasil.tokenBaru);
-      } catch {
-        /*
-         * Token ditolak server — karena kedaluwarsa, karena sudah dicabut, atau
-         * karena akun dinonaktifkan. Satu-satunya respons yang aman adalah
-         * membuang sesi:membiarkannya di storage hanya akan dicoba lagi pada muat
-         * berikutnya, dan `role` di dalamnya tidak boleh dipercaya.
-         */
+      } catch (err: unknown) {
         if (!hidup) return;
+
+        // Jaringan mati / offline tidak membatalkan sesi perangkat tepercaya.
+        // Pengguna tetap masuk dengan sesi lokal yang tersimpan di perangkat.
+        const isOffline =
+          (err instanceof PanelAuthError && err.kode === 0) ||
+          (typeof navigator !== 'undefined' && !navigator.onLine);
+
+        if (isOffline) {
+          const izinLokal = batasiIzin(sesiTersimpan.tabPermissions, sesiTersimpan.boundRole);
+          setCurrentUserState(sesiTersimpan.currentUser);
+          setTabPermissionsState(izinLokal);
+          setServerAutoLoginPending(!sudahKeluarServer(sesiTersimpan.currentUser.username));
+          return;
+        }
+
+        /*
+         * Token ditolak server (401/403) — karena dicabut atau akun dinonaktifkan.
+         * Satu-satunya respons yang aman adalah membuang sesi.
+         */
         clearAllSessions();
         setCurrentUserState(null);
         setTabPermissionsState(UNAUTHENTICATED_PERMISSIONS);

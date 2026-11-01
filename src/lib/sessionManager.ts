@@ -70,13 +70,13 @@ import {
 } from './userManager';
 
 /**
- * Sesi idle dibatalkan setelah 30 menit tanpa aktivitas.
- *
- *  Harus **sama** dengan masa berlaku token di `lib/panelServer.ts`. Kalau
- * lebih pendek, pengguna logout tanpa sebab; kalau lebih panjang, sesi
- * kedaluwarsa masih sempat dipakai sebelum server menolaknya.
+ * Sesi perangkat tepercaya (Android APK & Tauri Desktop / AppImage).
+ * Sesi bertahan selama 1 tahun (365 hari) sehingga login awal cukup sekali saja.
+ * Membuka aplikasi setelah HP mati / aplikasi ditutup akan langsung masuk tanpa
+ * meminta login ulang. Sesi hanya dibatalkan jika pengguna secara sadar menekan
+ * tombol "Keluar" (logout).
  */
-const SESSION_TIMEOUT_MS = 30 * 60 * 1000;
+export const SESSION_TIMEOUT_MS = 365 * 24 * 60 * 60 * 1000;
 
 const SESSION_KEY_PREFIX = 'epresensi_jatim_session_';
 /**

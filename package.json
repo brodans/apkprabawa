@@ -54,6 +54,7 @@
     "test:ignore": "tsx tools/cek-ignore-deploy.mts",
     "test:firestore": "tsx tools/cek-firestore-awal.mts",
     "test:performa": "tsx tools/cek-performa-sesi.mts",
+    "test:preset": "tsx tools/cek-preset-otomatisasi.mts",
     "test:tata-letak-tabel": "tsx tools/cek-tata-letak-tabel.mts",
     "test:naskah": "tsx tools/cek-naskah.mts",
     "test:bobot": "tsx tools/cek-bobot-fungsi.mts",
@@ -81,6 +82,7 @@
   },
   "dependencies": {
     "@tauri-apps/api": "^2.5.0",
+    "@tauri-apps/plugin-notification": "^2",
     "@google-cloud/firestore": "^9.3.0",
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.6",

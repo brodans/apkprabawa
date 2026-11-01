@@ -65,12 +65,42 @@ put(join(root, 'res/drawable/splash_screen.xml'), `<layer-list xmlns:android="ht
 
 const manifestPath = join(root, 'AndroidManifest.xml');
 if (existsSync(manifestPath)) {
-  const manifest = readFileSync(manifestPath, 'utf8');
-  let patchedManifest = manifest.replace(/android:theme="@style\/[^\"]+"/g, 'android:theme="@style/Theme.app"');
-  if (!/android:theme=/.test(patchedManifest)) {
-    patchedManifest = patchedManifest.replace(/<application\b/, '<application android:theme="@style/Theme.app"');
+  let manifest = readFileSync(manifestPath, 'utf8');
+  manifest = manifest.replace(/android:theme="@style\/[^\"]+"/g, 'android:theme="@style/Theme.app"');
+  if (!/android:theme=/.test(manifest)) {
+    manifest = manifest.replace(/<application\b/, '<application android:theme="@style/Theme.app"');
   }
-  if (patchedManifest !== manifest) writeFileSync(manifestPath, patchedManifest);
+
+  // Tambahkan permissions latar belakang & notifikasi jika belum ada
+  const permissions = [
+    'android.permission.INTERNET',
+    'android.permission.ACCESS_NETWORK_STATE',
+    'android.permission.WAKE_LOCK',
+    'android.permission.FOREGROUND_SERVICE',
+    'android.permission.FOREGROUND_SERVICE_SPECIAL_USE',
+    'android.permission.POST_NOTIFICATIONS',
+    'android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS',
+    'android.permission.RECEIVE_BOOT_COMPLETED',
+  ];
+  for (const perm of permissions) {
+    if (!manifest.includes(perm)) {
+      manifest = manifest.replace(/<application\b/, `<uses-permission android:name="${perm}" />\n    <application`);
+    }
+  }
+
+  // Daftarkan Foreground Service di dalam <application> jika belum ada
+  if (!manifest.includes('PrabawaForegroundService')) {
+    const serviceTag = `
+        <service
+            android:name="id.go.jatim.prabawa.PrabawaForegroundService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="specialUse" />
+    </application>`;
+    manifest = manifest.replace(/<\/application>/, serviceTag);
+  }
+
+  writeFileSync(manifestPath, manifest);
 }
 
 const activity = join(root, 'java/id/go/jatim/prabawa/MainActivity.kt');
@@ -97,7 +127,7 @@ import id.go.jatim.prabawa.TauriActivity
 
 class MainActivity : TauriActivity() {
 
-  /** Dipanggil dari JS saat Prabawa mengganti tema (dark/light). */
+  /** Dipanggil dari JS saat Prabawa mengganti tema (dark/light) dan kontrol background presensi. */
   inner class PrabawaBridge {
     @JavascriptInterface
     fun setTheme(dark: Boolean) {
@@ -112,6 +142,71 @@ class MainActivity : TauriActivity() {
       mainHandler.post {
         overlayDarkMode = active
         applySystemBarTheme()
+      }
+    }
+
+    @JavascriptInterface
+    fun startForegroundService(title: String?, content: String?) {
+      mainHandler.post {
+        try {
+          val intent = android.content.Intent(this@MainActivity, PrabawaForegroundService::class.java).apply {
+            action = PrabawaForegroundService.ACTION_START
+            putExtra(PrabawaForegroundService.EXTRA_TITLE, title ?: "PRABAWA Presensi")
+            putExtra(PrabawaForegroundService.EXTRA_CONTENT, content ?: "Penjadwal otomatisasi presensi aktif di latar belakang")
+          }
+          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(intent)
+          } else {
+            startService(intent)
+          }
+        } catch (e: Exception) {
+          e.printStackTrace()
+        }
+      }
+    }
+
+    @JavascriptInterface
+    fun stopForegroundService() {
+      mainHandler.post {
+        try {
+          val intent = android.content.Intent(this@MainActivity, PrabawaForegroundService::class.java).apply {
+            action = PrabawaForegroundService.ACTION_STOP
+          }
+          stopService(intent)
+        } catch (e: Exception) {
+          e.printStackTrace()
+        }
+      }
+    }
+
+    @JavascriptInterface
+    fun showNotification(title: String, message: String): Boolean {
+      mainHandler.post {
+        try {
+          PrabawaNotificationHelper.showNotification(this@MainActivity, title, message)
+        } catch (e: Exception) {
+          e.printStackTrace()
+        }
+      }
+      return true
+    }
+
+    @JavascriptInterface
+    fun requestBatteryOptimizationExemption() {
+      mainHandler.post {
+        try {
+          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val pm = getSystemService(android.content.Context.POWER_SERVICE) as? android.os.PowerManager
+            if (pm != null && !pm.isIgnoringBatteryOptimizations(packageName)) {
+              val intent = android.content.Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                data = android.net.Uri.parse("package:$packageName")
+              }
+              startActivity(intent)
+            }
+          }
+        } catch (e: Exception) {
+          e.printStackTrace()
+        }
       }
     }
   }
@@ -355,6 +450,159 @@ class MainActivity : TauriActivity() {
       controller.isAppearanceLightStatusBars = !isDark
       controller.isAppearanceLightNavigationBars = !isDark
     }
+  }
+}
+`);
+
+const fgService = join(root, 'java/id/go/jatim/prabawa/PrabawaForegroundService.kt');
+put(fgService, `package id.go.jatim.prabawa
+
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.app.Service
+import android.content.Context
+import android.content.Intent
+import android.os.Build
+import android.os.IBinder
+import android.os.PowerManager
+import androidx.core.app.NotificationCompat
+
+class PrabawaForegroundService : Service() {
+
+  companion object {
+    const val CHANNEL_ID = "prabawa_automation_channel"
+    const val NOTIFICATION_ID = 9912
+    const val ACTION_START = "id.go.jatim.prabawa.START_FOREGROUND"
+    const val ACTION_STOP = "id.go.jatim.prabawa.STOP_FOREGROUND"
+    const val EXTRA_TITLE = "extra_title"
+    const val EXTRA_CONTENT = "extra_content"
+  }
+
+  private var wakeLock: PowerManager.WakeLock? = null
+
+  override fun onBind(intent: Intent?): IBinder? = null
+
+  override fun onCreate() {
+    super.onCreate()
+    createNotificationChannel()
+    try {
+      val pm = getSystemService(Context.POWER_SERVICE) as? PowerManager
+      wakeLock = pm?.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "Prabawa:AutomationWakeLock")
+      wakeLock?.acquire(24 * 60 * 60 * 1000L)
+    } catch (_: Exception) {}
+  }
+
+  override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+    if (intent?.action == ACTION_STOP) {
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+        stopForeground(STOP_FOREGROUND_REMOVE)
+      } else {
+        @Suppress("DEPRECATION")
+        stopForeground(true)
+      }
+      stopSelf()
+      return START_NOT_STICKY
+    }
+
+    val title = intent?.getStringExtra(EXTRA_TITLE) ?: "PRABAWA Presensi"
+    val content = intent?.getStringExtra(EXTRA_CONTENT) ?: "Penjadwal presensi otomatis aktif di latar belakang"
+
+    val launchIntent = packageManager.getLaunchIntentForPackage(packageName)
+    val pendingIntent = if (launchIntent != null) {
+      PendingIntent.getActivity(
+        this, 0, launchIntent,
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0
+      )
+    } else null
+
+    val notification = NotificationCompat.Builder(this, CHANNEL_ID)
+      .setContentTitle(title)
+      .setContentText(content)
+      .setSmallIcon(R.mipmap.ic_launcher)
+      .setPriority(NotificationCompat.PRIORITY_LOW)
+      .setOngoing(true)
+      .setContentIntent(pendingIntent)
+      .build()
+
+    startForeground(NOTIFICATION_ID, notification)
+    return START_STICKY
+  }
+
+  override fun onDestroy() {
+    try {
+      if (wakeLock?.isHeld == true) {
+        wakeLock?.release()
+      }
+    } catch (_: Exception) {}
+    super.onDestroy()
+  }
+
+  private fun createNotificationChannel() {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+      val channel = NotificationChannel(
+        CHANNEL_ID,
+        "Layanan Presensi Latar Belakang",
+        NotificationManager.IMPORTANCE_LOW
+      ).apply {
+        description = "Menjaga penjadwal presensi otomatis tetap berjalan di latar belakang"
+        setShowBadge(false)
+      }
+      val nm = getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+      nm?.createNotificationChannel(channel)
+    }
+  }
+}
+`);
+
+const notifHelper = join(root, 'java/id/go/jatim/prabawa/PrabawaNotificationHelper.kt');
+put(notifHelper, `package id.go.jatim.prabawa
+
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.content.Context
+import android.os.Build
+import androidx.core.app.NotificationCompat
+
+object PrabawaNotificationHelper {
+  const val CHANNEL_ID = "prabawa_attendance_alerts"
+
+  fun showNotification(context: Context, title: String, message: String) {
+    val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return
+
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+      val channel = NotificationChannel(
+        CHANNEL_ID,
+        "Notifikasi Presensi PRABAWA",
+        NotificationManager.IMPORTANCE_HIGH
+      ).apply {
+        description = "Status eksekusi presensi otomatis terjadwal"
+        enableVibration(true)
+      }
+      nm.createNotificationChannel(channel)
+    }
+
+    val launchIntent = context.packageManager.getLaunchIntentForPackage(context.packageName)
+    val pendingIntent = if (launchIntent != null) {
+      PendingIntent.getActivity(
+        context,
+        (System.currentTimeMillis() % 10000).toInt(),
+        launchIntent,
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0
+      )
+    } else null
+
+    val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+      .setContentTitle(title)
+      .setContentText(message)
+      .setSmallIcon(R.mipmap.ic_launcher)
+      .setPriority(NotificationCompat.PRIORITY_HIGH)
+      .setAutoCancel(true)
+      .setContentIntent(pendingIntent)
+      .build()
+
+    nm.notify((System.currentTimeMillis() % 100000).toInt(), notification)
   }
 }
 `);
