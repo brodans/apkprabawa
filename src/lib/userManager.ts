@@ -35,6 +35,8 @@ export interface TabPermissions {
   tabLaporan: boolean;
   /** Menu WEB  e-Presensi BKD Jatim (IMEI, Kehadiran, Detail Pegawai, Perizinan). */
   tabWeb: boolean;
+  /** Menu Preset Otomatisasi (absensi otomatis terjadwal). */
+  tabPresetOtomatisasi: boolean;
 
   // Aksi sensitif
   aksiAbsen: boolean;
@@ -92,6 +94,7 @@ export const TAB_PERMISSION_LABELS: Record<keyof TabPermissions, string> = {
   tabLaporan: 'Laporan',
   tabLokasiAbsen: 'Lokasi Absen',
   tabWeb: 'WEB (e-Presensi BKD Jatim)',
+  tabPresetOtomatisasi: 'Preset Auto',
   aksiAbsen: 'Lakukan Absen',
   aksiAjukanIzin: 'Ajukan Izin',
   aksiSyncData: 'Sync Data',
@@ -111,6 +114,7 @@ export const PERMISSION_GROUPS: { label: string; keys: (keyof TabPermissions)[] 
       'tabLaporan',
       'tabLokasiAbsen',
       'tabWeb',
+      'tabPresetOtomatisasi',
     ],
   },
   {
@@ -140,6 +144,7 @@ export const DEFAULT_ADMIN_PERMISSIONS: TabPermissions = {
   tabLaporan: true,
   tabLokasiAbsen: true,
   tabWeb: true,
+  tabPresetOtomatisasi: true,
   aksiAbsen: true,
   aksiAjukanIzin: true,
   aksiSyncData: true,
@@ -157,6 +162,7 @@ export const DEFAULT_USER_PERMISSIONS: TabPermissions = {
   tabLokasiAbsen: true,
   tabLaporan: false,
   tabWeb: true,
+  tabPresetOtomatisasi: true,
   aksiAbsen: true,
   aksiAjukanIzin: true,
   aksiSyncData: true,

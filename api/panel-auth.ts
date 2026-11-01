@@ -304,6 +304,7 @@ var init_userManager = __esm({
       tabLaporan: true,
       tabLokasiAbsen: true,
       tabWeb: true,
+      tabPresetOtomatisasi: true,
       aksiAbsen: true,
       aksiAjukanIzin: true,
       aksiSyncData: true,
@@ -319,6 +320,7 @@ var init_userManager = __esm({
       tabLokasiAbsen: true,
       tabLaporan: false,
       tabWeb: true,
+      tabPresetOtomatisasi: true,
       aksiAbsen: true,
       aksiAjukanIzin: true,
       aksiSyncData: true,
@@ -1176,8 +1178,8 @@ var init_panelServer = __esm({
     COLL_TAGIHAN = "jatim_tagihan";
     BATAS_AKUN_PANEL = 1e3;
     DOC_AUTH = "auth";
-    TOKEN_TTL_MS = 30 * 60 * 1e3;
-    PERBARU_BILA_SISA_MS = 10 * 60 * 1e3;
+    TOKEN_TTL_MS = 365 * 24 * 60 * 60 * 1e3;
+    PERBARU_BILA_SISA_MS = 30 * 24 * 60 * 60 * 1e3;
     TOKEN_V = 1;
     NAMA_ADMIN_BAWAAN = "admin";
     GATEWAY_BAWAAN = "https://presensi.bkd.jatimprov.go.id/service";
