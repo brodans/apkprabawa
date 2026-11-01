@@ -17,7 +17,7 @@ jobs:
           cache: npm
       - uses: dtolnay/rust-toolchain@stable
       - name: Install Linux dependencies
-        run: sudo apt-get update && sudo apt-get install -y build-essential g++ libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf ruby ruby-dev zstd
+        run: sudo apt-get update && sudo apt-get install -y build-essential g++ libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libarchive-tools ruby ruby-dev zstd
       - name: Configure AppImage bundler
         run: echo 'APPIMAGE_EXTRACT_AND_RUN=1' >> "$GITHUB_ENV"
       - run: npm ci
