@@ -1,4 +1,4 @@
-name: Tauri AppImage
+name: Tauri Linux
 
 on:
   workflow_dispatch:
@@ -17,11 +17,13 @@ jobs:
           cache: npm
       - uses: dtolnay/rust-toolchain@stable
       - name: Install Linux dependencies
-        run: sudo apt-get update && sudo apt-get install -y build-essential g++ libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+        run: sudo apt-get update && sudo apt-get install -y build-essential g++ libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf ruby ruby-dev zstd
       - name: Configure AppImage bundler
         run: echo 'APPIMAGE_EXTRACT_AND_RUN=1' >> "$GITHUB_ENV"
       - run: npm ci
-      - name: Build Linux AppImage
+      - name: Install FPM
+        run: sudo gem install --no-document fpm --version 1.15.1
+      - name: Build Linux packages
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -31,4 +33,36 @@ jobs:
           releaseBody: Built automatically by GitHub Actions.
           releaseDraft: true
           prerelease: false
-          args: '--bundles appimage'
+          args: '--bundles appimage,deb'
+      - name: Package Arch Linux archive
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          deb_file="$(find src-tauri/target/release/bundle/deb -maxdepth 1 -type f -name '*.deb' -print -quit)"
+          if [[ -z "${deb_file}" ]]; then
+            echo "Tauri did not produce a .deb package."
+            exit 1
+          fi
+
+          app_version="$(node -e "console.log(JSON.parse(require('fs').readFileSync('src-tauri/tauri.conf.json', 'utf8')).version)")"
+          package_file="${RUNNER_TEMP}/prabawa-${app_version}-1-x86_64.pkg.tar.zst"
+          fpm -s deb -t pacman \
+            --name prabawa \
+            --version "${app_version}" \
+            --iteration 1 \
+            --architecture x86_64 \
+            --description "PRABAWA Portal Presensi Jawa Timur" \
+            --url https://prabawa.vercel.app \
+            --license custom \
+            --no-auto-depends \
+            --depends gtk3 \
+            --depends webkit2gtk-4.1 \
+            --depends openssl \
+            --depends libnotify \
+            --compression zstd \
+            --package "${package_file}" \
+            "${deb_file}"
+          test -s "${package_file}"
+          file "${package_file}" | grep -qi 'Zstandard compressed'
+          gh release upload "app-v${app_version}" "${package_file}" --clobber
