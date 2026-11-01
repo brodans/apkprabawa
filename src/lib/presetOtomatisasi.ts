@@ -24,7 +24,7 @@ export interface PresetOtomatisasi {
   nama: string;
   /** Tipe tindakan absensi. */
   tipe: TipePreset;
-  /** Array ID lokasi dari LokasiView, maksimal 20. */
+  /** ID titik lokasi milik akun di IndexedDB, maksimal 20. */
   lokasiIds: string[];
   /** ID workcode yang dipakai untuk absensi. */
   workcodeId: string;
@@ -426,6 +426,61 @@ export function dalamRentangWaktu(
   }
   // Rentang melintasi tengah malam (misal 23:00 - 02:00)
   return sekarang >= mulai || sekarang <= selesai;
+}
+
+/** Waktu pseudo-acak yang tetap sama untuk preset dan tanggal yang sama. */
+export function waktuAcakPreset(
+  presetId: string,
+  tanggal: string,
+  jamMulai: string,
+  jamSelesai: string,
+): string | null {
+  const keMenit = (hhmm: string): number => {
+    const cocok = /^(\d{2}):(\d{2})$/.exec(hhmm);
+    if (!cocok) return -1;
+    const jam = Number(cocok[1]);
+    const menit = Number(cocok[2]);
+    return jam < 24 && menit < 60 ? jam * 60 + menit : -1;
+  };
+  const mulai = keMenit(jamMulai);
+  const selesai = keMenit(jamSelesai);
+  if (mulai < 0 || selesai < 0 || !tanggal) return null;
+
+  const durasi = (selesai - mulai + 1440) % 1440;
+  const seed = `${presetId}:${tanggal}`;
+  let hash = 2166136261;
+  for (let index = 0; index < seed.length; index += 1) {
+    hash = Math.imul(hash ^ seed.charCodeAt(index), 16777619);
+  }
+  const menitTerpilih = (mulai + ((hash >>> 0) % (durasi + 1))) % 1440;
+  return `${String(Math.floor(menitTerpilih / 60)).padStart(2, '0')}:${String(menitTerpilih % 60).padStart(2, '0')}`;
+}
+
+/** Benar setelah waktu acak harian tercapai dan selama masih di rentang. */
+export function waktuAcakPresetSudahTiba(
+  presetId: string,
+  tanggal: string,
+  jamMulai: string,
+  jamSelesai: string,
+  jamSekarang: string,
+): boolean {
+  const keMenit = (hhmm: string): number => {
+    const cocok = /^(\d{2}):(\d{2})$/.exec(hhmm);
+    if (!cocok) return -1;
+    const jam = Number(cocok[1]);
+    const menit = Number(cocok[2]);
+    return jam < 24 && menit < 60 ? jam * 60 + menit : -1;
+  };
+  const mulai = keMenit(jamMulai);
+  const selesai = keMenit(jamSelesai);
+  const sekarang = keMenit(jamSekarang);
+  const target = waktuAcakPreset(presetId, tanggal, jamMulai, jamSelesai);
+  if (mulai < 0 || selesai < 0 || sekarang < 0 || !target) return false;
+
+  const durasi = (selesai - mulai + 1440) % 1440;
+  const waktuBerjalan = (sekarang - mulai + 1440) % 1440;
+  const targetBerjalan = (keMenit(target) - mulai + 1440) % 1440;
+  return waktuBerjalan <= durasi && waktuBerjalan >= targetBerjalan;
 }
 
 /**

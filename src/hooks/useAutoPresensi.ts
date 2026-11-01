@@ -24,7 +24,7 @@ import {
   tulisLog,
   sudahDieksekusiHariIni,
   hariIniAktif,
-  dalamRentangWaktu,
+  waktuAcakPresetSudahTiba,
   type PresetOtomatisasi,
 } from '../lib/presetOtomatisasi';
 import { getTodayWIB, getNowWIBTime } from '../lib/dateFormatter';
@@ -147,7 +147,13 @@ async function cekDanEksekusiPreset(
   for (const preset of presets) {
     if (!preset.aktif) continue;
     if (!hariIniAktif(preset.hariAktif, hariSekarang)) continue;
-    if (!dalamRentangWaktu(preset.jamMulai, preset.jamSelesai, jamSekarang)) continue;
+    if (!waktuAcakPresetSudahTiba(
+      preset.id,
+      tanggalHariIni,
+      preset.jamMulai,
+      preset.jamSelesai,
+      jamSekarang,
+    )) continue;
 
     const sudahEksekusi = await sudahDieksekusiHariIni(username, preset.id, tanggalHariIni);
     if (sudahEksekusi) continue;

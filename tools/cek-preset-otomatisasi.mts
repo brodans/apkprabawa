@@ -9,6 +9,8 @@ import {
   hariIniAktif,
   LABEL_HARI,
   URUTAN_HARI,
+  waktuAcakPreset,
+  waktuAcakPresetSudahTiba,
   type HariKerja,
 } from '../src/lib/presetOtomatisasi';
 
@@ -64,8 +66,36 @@ tegas(!dalamRentangWaktu('23:00', '02:00', '15:00'), 'Sore hari (15:00) harus di
 
 console.log('  ✅ Validasi rentang waktu akurat (termasuk kasus batas dan lintang tengah malam).');
 
-// ── 3. Tes Hari Aktif ─────────────────────────────────────────────────
-console.log('\n3. Pengujian Hari Aktif (hariIniAktif):');
+// ── 3. Tes Waktu Acak Harian ──────────────────────────────────────────
+console.log('\n3. Pengujian Waktu Acak Harian:');
+
+const waktuPertama = waktuAcakPreset('preset-1', '2026-11-01', '07:00', '09:00');
+tegas(waktuPertama !== null, 'Waktu target harus terbentuk');
+tegas(
+  waktuPertama === waktuAcakPreset('preset-1', '2026-11-01', '07:00', '09:00'),
+  'Waktu target harus stabil untuk tanggal dan preset yang sama'
+);
+const targetMenit = Number(waktuPertama!.slice(0, 2)) * 60 + Number(waktuPertama!.slice(3));
+tegas(targetMenit >= 7 * 60 && targetMenit <= 9 * 60, 'Waktu target harus berada di rentang preset');
+tegas(
+  waktuAcakPresetSudahTiba('preset-1', '2026-11-01', '07:00', '09:00', '06:59') === false,
+  'Preset tidak boleh berjalan sebelum waktu target/rentang'
+);
+const setelahTarget = `${String(Math.floor(targetMenit / 60)).padStart(2, '0')}:${String(targetMenit % 60).padStart(2, '0')}`;
+tegas(
+  waktuAcakPresetSudahTiba('preset-1', '2026-11-01', '07:00', '09:00', setelahTarget),
+  'Preset harus bisa berjalan saat waktu target tercapai'
+);
+const targetHarian = new Set(
+  Array.from({ length: 14 }, (_, hari) =>
+    waktuAcakPreset('preset-1', `2026-11-${String(hari + 1).padStart(2, '0')}`, '07:00', '09:00')
+  )
+);
+tegas(targetHarian.size > 1, 'Waktu target perlu bervariasi antar tanggal');
+console.log('  ✅ Waktu target stabil per hari, bervariasi antar hari, dan tetap di rentang.');
+
+// ── 4. Tes Hari Aktif ─────────────────────────────────────────────────
+console.log('\n4. Pengujian Hari Aktif (hariIniAktif):');
 
 const hariKerja: HariKerja[] = [1, 2, 3, 4, 5]; // Senin - Jumat
 tegas(hariIniAktif(hariKerja, 1), 'Senin (1) harus aktif');
@@ -75,8 +105,8 @@ tegas(!hariIniAktif(hariKerja, 6), 'Sabtu (6) harus tidak aktif');
 
 console.log('  ✅ Validasi hari aktif bekerja dengan benar.');
 
-// ── 4. Tes Urutan dan Label Hari ──────────────────────────────────────
-console.log('\n4. Pengujian Tampilan Hari:');
+// ── 5. Tes Urutan dan Label Hari ──────────────────────────────────────
+console.log('\n5. Pengujian Tampilan Hari:');
 tegas(URUTAN_HARI.length === 7, 'Harus ada 7 hari');
 tegas(LABEL_HARI[1] === 'Sen', 'Hari 1 harus Senin');
 tegas(LABEL_HARI[0] === 'Min', 'Hari 0 harus Minggu');
