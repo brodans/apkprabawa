@@ -61,12 +61,12 @@ import {
 
 function TipeBadge({ tipe }: { tipe: PresetOtomatisasi['tipe'] }) {
   if (tipe === 'datang') {
-    return <Badge tone="emerald">Masuk</Badge>;
+    return <Badge tone="emerald">Datang</Badge>;
   }
   if (tipe === 'pulang') {
     return <Badge tone="amber">Pulang</Badge>;
   }
-  return <Badge tone="violet">Custom</Badge>;
+  return <Badge tone="violet">Absen Siang</Badge>;
 }
 
 // ═══════════════════════════════════════════════════════════════════════

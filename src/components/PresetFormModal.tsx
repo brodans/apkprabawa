@@ -3,7 +3,7 @@
  *
  * Layout mobile-first dengan field:
  * - Nama preset
- * - Tipe (pill button: Masuk/Pulang/Custom)
+ * - Tipe (pill button: Datang/Pulang/Absen Siang)
  * - Workcode (Dropdown)
  * - Jam mulai & selesai (dua input type=time berdampingan)
  * - Hari aktif (chip toggle 7 hari)
@@ -70,9 +70,9 @@ const FORM_KOSONG: FormState = {
 // ═══════════════════════════════════════════════════════════════════════
 
 const TIPE_OPTIONS: { tipe: TipePreset; label: string }[] = [
-  { tipe: 'datang', label: 'Masuk' },
+  { tipe: 'datang', label: 'Datang' },
   { tipe: 'pulang', label: 'Pulang' },
-  { tipe: 'custom', label: 'Custom' },
+  { tipe: 'custom', label: 'Absen Siang' },
 ];
 
 const MAKS_LOKASI = 20;
@@ -221,7 +221,7 @@ export default function PresetFormModal({
         {/* ── Nama Preset ── */}
         <Field label="Nama Preset" required>
           <Input
-            placeholder="Contoh: Masuk Pagi Otomatis"
+            placeholder="Contoh: Datang Pagi Otomatis"
             value={form.nama}
             onChange={e => set('nama', e.target.value)}
             maxLength={80}
