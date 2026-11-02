@@ -268,23 +268,28 @@ export function useAutoPresensi({
   useEffect(() => { contextRef.current = context; }, [context]);
   useEffect(() => { onEksekusiRef.current = onEksekusi; }, [onEksekusi]);
 
-  // Pasang interval + visibility listener bila aktif & siap, bersihkan bila tidak.
+  // Pasang timer self-correcting + visibility + online listener bila aktif & siap.
   useEffect(() => {
     if (!aktif || !username || !ready) return;
 
     requestAndroidNotificationPermission();
 
-    // Aktifkan Android Foreground Service agar proses tidak dibunuh oleh OS di latar belakang
+    // Aktifkan Android Foreground Service agar proses tidak dibunuh oleh OS di latar belakang.
+    // PrabawaAutomasiBridge juga menyimpan state ke SharedPreferences sehingga
+    // PrabawaBootReceiver & PrabawaKeepaliveWorker tahu apa yang perlu di-restart.
     startAndroidForegroundService(
       'PRABAWA Presensi Otomatis',
       'Penjadwal presensi aktif memantau jadwal harian'
     );
 
     let running = false; // mutex agar tidak double-eksekusi
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    let destroyed = false;
 
     const eksekusi = async () => {
-      if (running) return;
+      if (running || destroyed) return;
       running = true;
+      const start = Date.now();
       try {
         await cekDanEksekusiPreset(
           presetsRef.current,
@@ -292,28 +297,59 @@ export function useAutoPresensi({
           contextRef.current,
           onEksekusiRef.current,
         );
+      } catch (e) {
+        console.error('[AutoPresensi] Eksekusi error:', e);
       } finally {
         running = false;
+        if (!destroyed) {
+          // Self-correcting timer: kurangi waktu yang sudah terpakai agar tidak drift
+          const elapsed = Date.now() - start;
+          const next = Math.max(0, INTERVAL_MS - elapsed);
+          timeoutId = setTimeout(eksekusiLoop, next);
+        }
       }
+    };
+
+    const eksekusiLoop = () => {
+      if (destroyed) return;
+      void eksekusi();
     };
 
     // Jalankan sekali saat pertama mount.
     void eksekusi();
 
-    // Polling tiap 30 detik (berfungsi di AppImage/desktop, Android foreground).
-    const intervalId = window.setInterval(() => { void eksekusi(); }, INTERVAL_MS);
-
     // Visibility change: Android resume dari background → langsung cek ulang.
+    // Juga pastikan foreground service masih aktif setelah resume.
     const handleVisibility = () => {
-      if (document.visibilityState === 'visible') void eksekusi();
+      if (document.visibilityState === 'visible' && !destroyed) {
+        // Restart foreground service jika Android (agar tidak mati saat minimize)
+        startAndroidForegroundService(
+          'PRABAWA Presensi Otomatis',
+          'Penjadwal presensi aktif memantau jadwal harian'
+        );
+        void eksekusi();
+      }
     };
-    const handleBackgroundTick = () => { void eksekusi(); };
+
+    // Online: koneksi kembali → cek ulang segera
+    const handleOnline = () => {
+      if (!destroyed) void eksekusi();
+    };
+
+    // Background tick dari PrabawaForegroundService (setiap 30 detik)
+    const handleBackgroundTick = () => {
+      if (!destroyed) void eksekusi();
+    };
+
     document.addEventListener('visibilitychange', handleVisibility);
+    window.addEventListener('online', handleOnline);
     window.addEventListener('prabawa-background-tick', handleBackgroundTick);
 
     return () => {
-      window.clearInterval(intervalId);
+      destroyed = true;
+      if (timeoutId !== null) clearTimeout(timeoutId);
       document.removeEventListener('visibilitychange', handleVisibility);
+      window.removeEventListener('online', handleOnline);
       window.removeEventListener('prabawa-background-tick', handleBackgroundTick);
       stopAndroidForegroundService();
     };
