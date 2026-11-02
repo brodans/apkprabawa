@@ -192,6 +192,7 @@ class MainActivity : TauriActivity() {
           }
           getSharedPreferences("prabawa_automasi", android.content.Context.MODE_PRIVATE)
             .edit().putBoolean("penjadwal_aktif", true).apply()
+          PrabawaKeepaliveWorker.enqueue(this@MainActivity)
         } catch (e: Exception) {
           e.printStackTrace()
         }
@@ -218,6 +219,7 @@ class MainActivity : TauriActivity() {
           stopService(intent)
           getSharedPreferences("prabawa_automasi", android.content.Context.MODE_PRIVATE)
             .edit().putBoolean("penjadwal_aktif", false).apply()
+          PrabawaKeepaliveWorker.cancel(this@MainActivity)
         } catch (e: Exception) {
           e.printStackTrace()
         }
@@ -785,6 +787,7 @@ const isiGradle = [
   '    implementation("androidx.activity:activity-ktx:1.10.1")',
   '    implementation("com.google.android.material:material:1.12.0")',
   '    implementation("androidx.lifecycle:lifecycle-process:2.10.0")',
+  '    implementation("androidx.work:work-runtime-ktx:2.9.0")',
   '    testImplementation("junit:junit:4.13.2")',
   '    androidTestImplementation("androidx.test.ext:junit:1.1.4")',
   '    androidTestImplementation("androidx.test.espresso:espresso-core:3.5.0")',
@@ -802,6 +805,10 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.util.Log
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkManager
+import java.util.concurrent.TimeUnit
 
 class PrabawaBootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
@@ -828,6 +835,118 @@ class PrabawaBootReceiver : BroadcastReceiver() {
         } catch (e: Exception) {
             Log.e("PrabawaBoot", "Gagal: \${e.message}")
         }
+
+        try {
+            val req = PeriodicWorkRequestBuilder<PrabawaKeepaliveWorker>(15, TimeUnit.MINUTES).build()
+            WorkManager.getInstance(context).enqueueUniquePeriodicWork(
+                PrabawaKeepaliveWorker.WORK_NAME,
+                ExistingPeriodicWorkPolicy.UPDATE,
+                req
+            )
+        } catch (e: Exception) {
+            Log.e("PrabawaBoot", "WorkManager gagal: \${e.message}")
+        }
     }
 }
 `);
+
+// ProGuard rules untuk WorkManager — wajib ada agar Room/WorkDatabase tidak
+// di-strip oleh R8 saat isMinifyEnabled = true di release build.
+const proguardPath = join(process.cwd(), 'src-tauri/gen/android/app/proguard-rules.pro');
+const proguardRules = `
+# WorkManager — keep Room database dan scheduler classes dari R8 stripping
+-keep class androidx.work.** { *; }
+-keep class androidx.work.impl.** { *; }
+-keep class androidx.room.** { *; }
+-keep class androidx.room.RoomDatabase { *; }
+-keepclassmembers class * extends androidx.room.RoomDatabase { *; }
+-keep class * extends androidx.work.Worker { *; }
+-keep class * extends androidx.work.ListenableWorker {
+    public <init>(android.content.Context, androidx.work.WorkerParameters);
+}
+-keepnames class androidx.work.impl.WorkDatabase
+-keepnames class androidx.work.impl.WorkDatabase_Impl
+`;
+// Append ke file yang sudah ada, atau buat baru jika belum ada
+if (existsSync(proguardPath)) {
+  const existing = readFileSync(proguardPath, 'utf8');
+  if (!existing.includes('WorkManager')) {
+    writeFileSync(proguardPath, existing + proguardRules);
+    console.log('✅ ProGuard rules WorkManager ditambahkan ke proguard-rules.pro');
+  }
+} else {
+  writeFileSync(proguardPath, proguardRules);
+  console.log('✅ proguard-rules.pro dibuat dengan WorkManager rules');
+}
+
+// PrabawaKeepaliveWorker.kt — Worker biasa (bukan CoroutineWorker)
+const keepaliveWorker = join(root, 'java/id/go/jatim/prabawa/PrabawaKeepaliveWorker.kt');
+put(keepaliveWorker, `package id.go.jatim.prabawa
+
+import android.content.Context
+import android.os.Build
+import android.util.Log
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkManager
+import androidx.work.Worker
+import androidx.work.WorkerParameters
+import java.util.concurrent.TimeUnit
+
+class PrabawaKeepaliveWorker(
+    private val ctx: Context,
+    params: WorkerParameters,
+) : Worker(ctx, params) {
+
+    companion object {
+        const val WORK_NAME = "prabawa_keepalive"
+
+        fun enqueue(context: Context) {
+            try {
+                val req = PeriodicWorkRequestBuilder<PrabawaKeepaliveWorker>(
+                    15, TimeUnit.MINUTES
+                ).build()
+                WorkManager.getInstance(context).enqueueUniquePeriodicWork(
+                    WORK_NAME, ExistingPeriodicWorkPolicy.UPDATE, req
+                )
+                Log.d("PrabawaWorker", "Keepalive enqueued")
+            } catch (e: Exception) {
+                Log.e("PrabawaWorker", "enqueue gagal: \${e.message}")
+            }
+        }
+
+        fun cancel(context: Context) {
+            try {
+                WorkManager.getInstance(context).cancelUniqueWork(WORK_NAME)
+                Log.d("PrabawaWorker", "Keepalive cancelled")
+            } catch (e: Exception) {
+                Log.e("PrabawaWorker", "cancel gagal: \${e.message}")
+            }
+        }
+    }
+
+    override fun doWork(): Result {
+        val prefs = ctx.getSharedPreferences("prabawa_automasi", Context.MODE_PRIVATE)
+        if (!prefs.getBoolean("penjadwal_aktif", false)) return Result.success()
+
+        return try {
+            val serviceIntent = android.content.Intent(ctx, PrabawaForegroundService::class.java).apply {
+                action = PrabawaForegroundService.ACTION_START
+                putExtra(PrabawaForegroundService.EXTRA_TITLE, "PRABAWA Presensi Otomatis")
+                putExtra(PrabawaForegroundService.EXTRA_CONTENT, "Penjadwal presensi aktif memantau jadwal harian")
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                ctx.startForegroundService(serviceIntent)
+            } else {
+                ctx.startService(serviceIntent)
+            }
+            Log.d("PrabawaWorker", "ForegroundService (re)started")
+            Result.success()
+        } catch (e: Exception) {
+            Log.e("PrabawaWorker", "Gagal: \${e.message}")
+            Result.retry()
+        }
+    }
+}
+`);
+console.log('✅ PrabawaKeepaliveWorker.kt ditulis');
