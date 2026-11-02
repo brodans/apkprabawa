@@ -13,6 +13,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { useServerContext } from '../hooks/useServerContext';
 import { useAutoPresensi } from '../hooks/useAutoPresensi';
+import { useAndroidPresetSync } from '../hooks/useAndroidPresetSync';
 import {
   bacaSemuaPreset,
   type PresetOtomatisasi,
@@ -93,6 +94,10 @@ export default function GlobalPresetScheduler() {
     presets,
     aktif: penjadwalAktif && ready && !!username && !!pegawai,
   });
+
+  // Sync preset dan session ke SharedPreferences Android agar
+  // KeepaliveWorker bisa eksekusi presensi meski app di-swipe dari recents
+  useAndroidPresetSync();
 
   return null;
 }

@@ -263,6 +263,38 @@ class MainActivity : TauriActivity() {
       val pm = getSystemService(android.content.Context.POWER_SERVICE) as? android.os.PowerManager
       return pm?.isIgnoringBatteryOptimizations(packageName) == true
     }
+
+    @JavascriptInterface
+    fun syncSession(json: String) {
+      try {
+        getSharedPreferences("prabawa_session", android.content.Context.MODE_PRIVATE)
+          .edit().putString("session_json", json).apply()
+      } catch (_: Exception) {}
+    }
+
+    @JavascriptInterface
+    fun syncPresets(json: String) {
+      try {
+        getSharedPreferences("prabawa_presets", android.content.Context.MODE_PRIVATE)
+          .edit().putString("presets_json", json).apply()
+      } catch (_: Exception) {}
+    }
+
+    @JavascriptInterface
+    fun readWorkerLog(): String {
+      return try {
+        getSharedPreferences("prabawa_worker_log", android.content.Context.MODE_PRIVATE)
+          .getString("log_json", "[]") ?: "[]"
+      } catch (_: Exception) { "[]" }
+    }
+
+    @JavascriptInterface
+    fun clearWorkerLog() {
+      try {
+        getSharedPreferences("prabawa_worker_log", android.content.Context.MODE_PRIVATE)
+          .edit().putString("log_json", "[]").apply()
+      } catch (_: Exception) {}
+    }
   }
 
   private val mainHandler = Handler(Looper.getMainLooper())
@@ -891,6 +923,15 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.Worker
 import androidx.work.WorkerParameters
+import org.json.JSONArray
+import org.json.JSONObject
+import java.io.OutputStreamWriter
+import java.net.HttpURLConnection
+import java.net.URL
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Locale
+import java.util.TimeZone
 import java.util.concurrent.TimeUnit
 
 class PrabawaKeepaliveWorker(
@@ -926,26 +967,228 @@ class PrabawaKeepaliveWorker(
     }
 
     override fun doWork(): Result {
-        val prefs = ctx.getSharedPreferences("prabawa_automasi", Context.MODE_PRIVATE)
-        if (!prefs.getBoolean("penjadwal_aktif", false)) return Result.success()
+        val automasi = ctx.getSharedPreferences("prabawa_automasi", Context.MODE_PRIVATE)
+        if (!automasi.getBoolean("penjadwal_aktif", false)) return Result.success()
 
-        return try {
-            val serviceIntent = android.content.Intent(ctx, PrabawaForegroundService::class.java).apply {
+        // Pastikan ForegroundService tetap hidup
+        restartForegroundService()
+
+        // Eksekusi presensi dari Kotlin native
+        try {
+            eksekusiPreset()
+        } catch (e: Exception) {
+            Log.e("PrabawaWorker", "eksekusi error: \${e.message}")
+        }
+
+        return Result.success()
+    }
+
+    private fun restartForegroundService() {
+        try {
+            val intent = android.content.Intent(ctx, PrabawaForegroundService::class.java).apply {
                 action = PrabawaForegroundService.ACTION_START
                 putExtra(PrabawaForegroundService.EXTRA_TITLE, "PRABAWA Presensi Otomatis")
                 putExtra(PrabawaForegroundService.EXTRA_CONTENT, "Penjadwal presensi aktif memantau jadwal harian")
             }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                ctx.startForegroundService(serviceIntent)
-            } else {
-                ctx.startService(serviceIntent)
-            }
-            Log.d("PrabawaWorker", "ForegroundService (re)started")
-            Result.success()
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) ctx.startForegroundService(intent)
+            else ctx.startService(intent)
         } catch (e: Exception) {
-            Log.e("PrabawaWorker", "Gagal: \${e.message}")
-            Result.retry()
+            Log.e("PrabawaWorker", "restart service gagal: \${e.message}")
         }
+    }
+
+    private fun eksekusiPreset() {
+        // Baca session
+        val sessionPrefs = ctx.getSharedPreferences("prabawa_session", Context.MODE_PRIVATE)
+        val sessionJson = sessionPrefs.getString("session_json", null) ?: return
+        val session = JSONObject(sessionJson)
+        val apiKey = session.optString("apiKey").ifBlank { return }
+        val imei = session.optString("imei")
+        val baseLatLong = session.optString("lastLatLong")
+        val baseUrl = session.optString("baseUrl").ifBlank { "https://prabawa.vercel.app/api/rpc" }
+
+        // Baca presets
+        val presetsPrefs = ctx.getSharedPreferences("prabawa_presets", Context.MODE_PRIVATE)
+        val presetsJson = presetsPrefs.getString("presets_json", null) ?: return
+        val presets = JSONArray(presetsJson)
+
+        val wib = TimeZone.getTimeZone("Asia/Jakarta")
+        val now = Calendar.getInstance(wib)
+        val hariIni = now.get(Calendar.DAY_OF_WEEK) - 1  // 0=Min..6=Sab
+        val jamSekarang = String.format("%02d:%02d", now.get(Calendar.HOUR_OF_DAY), now.get(Calendar.MINUTE))
+        val tanggal = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply { timeZone = wib }.format(now.time)
+
+        for (i in 0 until presets.length()) {
+            val preset = presets.getJSONObject(i)
+            if (!preset.optBoolean("aktif", false)) continue
+
+            // Cek hari aktif
+            val hariAktif = preset.optJSONArray("hariAktif") ?: continue
+            val hariList = (0 until hariAktif.length()).map { hariAktif.getInt(it) }
+            if (hariIni !in hariList) continue
+
+            // Cek rentang waktu
+            if (!dalamRentangWaktu(preset.optString("jamMulai"), preset.optString("jamSelesai"), jamSekarang)) continue
+
+            // Cek sudah dieksekusi hari ini
+            if (sudahEksekusiHariIni(preset.optString("id"), tanggal)) continue
+
+            // Pilih lokasi acak
+            val lokasiArr = preset.optJSONArray("lokasi") ?: continue
+            if (lokasiArr.length() == 0) continue
+            val lokasi = lokasiArr.getJSONObject((Math.random() * lokasiArr.length()).toInt())
+            val lat = lokasi.optDouble("latitude", 0.0)
+            val lng = lokasi.optDouble("longitude", 0.0)
+            val latLong = if (lat != 0.0 && lng != 0.0) "\${lat},\${lng}" else baseLatLong
+
+            // Tentukan checktype dari tipe preset
+            val checktype = when (preset.optString("tipe")) {
+                "datang" -> 1
+                "pulang" -> 2
+                else -> 5
+            }
+
+            // Eksekusi absen via HTTP
+            val (berhasil, pesan) = kirimAbsen(
+                baseUrl = baseUrl,
+                apiKey = apiKey,
+                imei = imei,
+                lastLatLong = latLong,
+                checktype = checktype,
+                workCode = preset.optString("workcodeId"),
+            )
+
+            // Simpan log
+            tulisLog(
+                presetId = preset.optString("id"),
+                presetNama = preset.optString("nama"),
+                tanggal = tanggal,
+                berhasil = berhasil,
+                pesan = pesan,
+            )
+
+            // Kirim notifikasi
+            val notifTitle = if (berhasil) "✅ Presensi Berhasil" else "⚠️ Presensi Gagal"
+            PrabawaNotificationHelper.showNotification(ctx, notifTitle, "\${preset.optString("nama")} — \$pesan")
+
+            Log.d("PrabawaWorker", "Preset '\${preset.optString("nama")}': berhasil=\$berhasil, pesan=\$pesan")
+        }
+    }
+
+    private fun kirimAbsen(
+        baseUrl: String,
+        apiKey: String,
+        imei: String,
+        lastLatLong: String,
+        checktype: Int,
+        workCode: String,
+    ): Pair<Boolean, String> {
+        return try {
+            val body = JSONObject().apply {
+                put("jsonrpc", 2)
+                put("method", "POST")
+                put("version", 89)
+                put("object", "absen")
+                put("param", JSONObject().apply {
+                    put("checktype", checktype)
+                    put("work_code", workCode)
+                    put("iswfh", 0)
+                    put("ijin", 0)
+                    put("keterangan", "")
+                    put("type_ijin", 0)
+                    put("mock", 0)
+                    put("api_key", apiKey)
+                    put("last_latlong", lastLatLong)
+                    put("imei", imei)
+                })
+            }.toString()
+
+            val url = URL(baseUrl)
+            val conn = url.openConnection() as HttpURLConnection
+            conn.requestMethod = "POST"
+            conn.setRequestProperty("Content-Type", "application/json")
+            conn.setRequestProperty("Accept", "application/json")
+            conn.doOutput = true
+            conn.connectTimeout = 15_000
+            conn.readTimeout = 15_000
+
+            OutputStreamWriter(conn.outputStream).use { it.write(body) }
+
+            val responseCode = conn.responseCode
+            val responseBody = try {
+                conn.inputStream.bufferedReader().readText()
+            } catch (_: Exception) {
+                conn.errorStream?.bufferedReader()?.readText() ?: ""
+            }
+            conn.disconnect()
+
+            if (responseCode != 200) {
+                return Pair(false, "HTTP \$responseCode")
+            }
+
+            val resp = JSONObject(responseBody)
+            val result = resp.optJSONObject("result")
+            if (result != null) {
+                val absen = result.optBoolean("absen", false)
+                val message = result.optString("message", "")
+                Pair(absen, message.ifBlank { if (absen) "Berhasil" else "Ditolak server" })
+            } else {
+                val error = resp.optString("error", "")
+                Pair(false, error.ifBlank { "Respons tidak valid" })
+            }
+        } catch (e: Exception) {
+            Pair(false, e.message ?: "Koneksi gagal")
+        }
+    }
+
+    private fun dalamRentangWaktu(mulai: String, selesai: String, sekarang: String): Boolean {
+        fun toMenit(hhmm: String): Int {
+            val parts = hhmm.split(":")
+            if (parts.size < 2) return -1
+            val h = parts[0].toIntOrNull() ?: return -1
+            val m = parts[1].toIntOrNull() ?: return -1
+            return h * 60 + m
+        }
+        val m = toMenit(mulai); val s = toMenit(selesai); val n = toMenit(sekarang)
+        if (m < 0 || s < 0 || n < 0) return false
+        return if (m <= s) n in m..s else n >= m || n <= s
+    }
+
+    private fun sudahEksekusiHariIni(presetId: String, tanggal: String): Boolean {
+        val logPrefs = ctx.getSharedPreferences("prabawa_worker_log", Context.MODE_PRIVATE)
+        val raw = logPrefs.getString("log_json", "[]") ?: "[]"
+        return try {
+            val arr = JSONArray(raw)
+            for (i in 0 until arr.length()) {
+                val e = arr.getJSONObject(i)
+                if (e.optString("presetId") == presetId &&
+                    e.optString("tanggal") == tanggal &&
+                    e.optBoolean("berhasil", false)) return true
+            }
+            false
+        } catch (_: Exception) { false }
+    }
+
+    private fun tulisLog(presetId: String, presetNama: String, tanggal: String, berhasil: Boolean, pesan: String) {
+        val logPrefs = ctx.getSharedPreferences("prabawa_worker_log", Context.MODE_PRIVATE)
+        val raw = logPrefs.getString("log_json", "[]") ?: "[]"
+        val arr = try { JSONArray(raw) } catch (_: Exception) { JSONArray() }
+        // Hapus log lama untuk preset+tanggal yang sama
+        val baru = JSONArray()
+        for (i in 0 until arr.length()) {
+            val e = arr.getJSONObject(i)
+            if (e.optString("presetId") == presetId && e.optString("tanggal") == tanggal) continue
+            baru.put(e)
+        }
+        baru.put(JSONObject().apply {
+            put("presetId", presetId)
+            put("presetNama", presetNama)
+            put("tanggal", tanggal)
+            put("eksekusiPada", System.currentTimeMillis())
+            put("berhasil", berhasil)
+            put("pesan", pesan)
+        })
+        logPrefs.edit().putString("log_json", baru.toString()).apply()
     }
 }
 `);
