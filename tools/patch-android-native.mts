@@ -313,8 +313,7 @@ class MainActivity : TauriActivity() {
 
     @JavascriptInterface
     fun startForegroundService(title: String, content: String) {
-      val intent = Intent(this@MainActivity, PrabawaForegroundService::class.java).apply {
-        action = PrabawaForegroundService.ACTION_START
+      val intent = Intent(PrabawaForegroundService.ACTION_START, null, this@MainActivity, PrabawaForegroundService::class.java).apply {
         putExtra(PrabawaForegroundService.EXTRA_TITLE, title)
         putExtra(PrabawaForegroundService.EXTRA_CONTENT, content)
       }
@@ -336,9 +335,7 @@ class MainActivity : TauriActivity() {
     @JavascriptInterface
     fun stopForegroundService() {
       try {
-        val intent = Intent(this@MainActivity, PrabawaForegroundService::class.java).apply {
-          action = PrabawaForegroundService.ACTION_STOP
-        }
+        val intent = Intent(PrabawaForegroundService.ACTION_STOP, null, this@MainActivity, PrabawaForegroundService::class.java)
         startService(intent)
         getSharedPreferences("prabawa_automasi", android.content.Context.MODE_PRIVATE).edit().apply {
           putBoolean("penjadwal_aktif", false)
@@ -854,8 +851,7 @@ class PrabawaBootReceiver : BroadcastReceiver() {
         }
 
         // 1. Start ForegroundService langsung — tidak perlu Activity
-        val serviceIntent = Intent(context, PrabawaForegroundService::class.java).apply {
-            action = PrabawaForegroundService.ACTION_START
+        val serviceIntent = Intent(PrabawaForegroundService.ACTION_START, null, context, PrabawaForegroundService::class.java).apply {
             putExtra(PrabawaForegroundService.EXTRA_TITLE, "PRABAWA Presensi Otomatis")
             putExtra(PrabawaForegroundService.EXTRA_CONTENT, "Penjadwal presensi aktif memantau jadwal harian")
         }
@@ -957,8 +953,7 @@ class PrabawaKeepaliveWorker(
         }
 
         // Pastikan ForegroundService masih berjalan
-        val serviceIntent = Intent(ctx, PrabawaForegroundService::class.java).apply {
-            action = PrabawaForegroundService.ACTION_START
+        val serviceIntent = Intent(PrabawaForegroundService.ACTION_START, null, ctx, PrabawaForegroundService::class.java).apply {
             putExtra(PrabawaForegroundService.EXTRA_TITLE, "PRABAWA Presensi Otomatis")
             putExtra(PrabawaForegroundService.EXTRA_CONTENT, "Penjadwal presensi aktif memantau jadwal harian")
         }
