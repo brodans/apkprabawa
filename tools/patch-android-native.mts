@@ -95,7 +95,11 @@ if (existsSync(manifestPath)) {
             android:name="id.go.jatim.prabawa.PrabawaForegroundService"
             android:enabled="true"
             android:exported="false"
-            android:foregroundServiceType="specialUse" />
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Maintains user-enabled scheduled attendance automation while the app is in the background" />
+        </service>
     </application>`;
     manifest = manifest.replace(/<\/application>/, serviceTag);
   }
@@ -119,11 +123,27 @@ import android.view.ViewTreeObserver
 import android.view.WindowManager
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
+import java.lang.ref.WeakReference
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import id.go.jatim.prabawa.TauriActivity
+
+private object AutomationWebView {
+  @Volatile var instance: WeakReference<WebView>? = null
+
+  fun requestCheck() {
+    instance?.get()?.post {
+      try {
+        instance?.get()?.evaluateJavascript(
+          "window.dispatchEvent(new Event('prabawa-background-tick'))",
+          null
+        )
+      } catch (_: Exception) {}
+    }
+  }
+}
 
 class MainActivity : TauriActivity() {
 
@@ -161,6 +181,16 @@ class MainActivity : TauriActivity() {
           }
         } catch (e: Exception) {
           e.printStackTrace()
+        }
+      }
+    }
+
+    @JavascriptInterface
+    fun requestNotificationPermission() {
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+          checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+        mainHandler.post {
+          requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 9913)
         }
       }
     }
@@ -308,6 +338,7 @@ class MainActivity : TauriActivity() {
     if (bridgeInjected) return
     bridgeInjected = true
 
+    AutomationWebView.instance = WeakReference(wv)
     wv.addJavascriptInterface(PrabawaBridge(), "AndroidPrabawa")
 
     // Pengaturan penting untuk Midtrans Snap di WebView Android:
@@ -472,6 +503,8 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.IBinder
+import android.os.Handler
+import android.os.Looper
 import android.os.PowerManager
 import androidx.core.app.NotificationCompat
 
@@ -487,16 +520,27 @@ class PrabawaForegroundService : Service() {
   }
 
   private var wakeLock: PowerManager.WakeLock? = null
+  private var notificationTitle = "PRABAWA Presensi"
+  private var notificationContent = "Penjadwal presensi otomatis aktif di latar belakang"
+  private val handler = Handler(Looper.getMainLooper())
+  private val automationTick = object : Runnable {
+    override fun run() {
+      AutomationWebView.requestCheck()
+      refreshOngoingNotification()
+      handler.postDelayed(this, 30_000L)
+    }
+  }
 
   override fun onBind(intent: Intent?): IBinder? = null
 
   override fun onCreate() {
     super.onCreate()
     createNotificationChannel()
+    handler.postDelayed(automationTick, 30_000L)
     try {
       val pm = getSystemService(Context.POWER_SERVICE) as? PowerManager
       wakeLock = pm?.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "Prabawa:AutomationWakeLock")
-      wakeLock?.acquire(24 * 60 * 60 * 1000L)
+      wakeLock?.acquire()
     } catch (_: Exception) {}
   }
 
@@ -512,9 +556,14 @@ class PrabawaForegroundService : Service() {
       return START_NOT_STICKY
     }
 
-    val title = intent?.getStringExtra(EXTRA_TITLE) ?: "PRABAWA Presensi"
-    val content = intent?.getStringExtra(EXTRA_CONTENT) ?: "Penjadwal presensi otomatis aktif di latar belakang"
+    notificationTitle = intent?.getStringExtra(EXTRA_TITLE) ?: notificationTitle
+    notificationContent = intent?.getStringExtra(EXTRA_CONTENT) ?: notificationContent
 
+    startForeground(NOTIFICATION_ID, buildNotification())
+    return START_STICKY
+  }
+
+  private fun buildNotification(): android.app.Notification {
     val launchIntent = packageManager.getLaunchIntentForPackage(packageName)
     val pendingIntent = if (launchIntent != null) {
       PendingIntent.getActivity(
@@ -524,19 +573,27 @@ class PrabawaForegroundService : Service() {
     } else null
 
     val notification = NotificationCompat.Builder(this, CHANNEL_ID)
-      .setContentTitle(title)
-      .setContentText(content)
+      .setContentTitle(notificationTitle)
+      .setContentText(notificationContent)
       .setSmallIcon(R.mipmap.ic_launcher)
       .setPriority(NotificationCompat.PRIORITY_LOW)
       .setOngoing(true)
+      .setAutoCancel(false)
       .setContentIntent(pendingIntent)
       .build()
+    notification.flags = notification.flags or android.app.Notification.FLAG_NO_CLEAR
+    return notification
+  }
 
-    startForeground(NOTIFICATION_ID, notification)
-    return START_STICKY
+  private fun refreshOngoingNotification() {
+    try {
+      val manager = getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+      manager?.notify(NOTIFICATION_ID, buildNotification())
+    } catch (_: SecurityException) {}
   }
 
   override fun onDestroy() {
+    handler.removeCallbacks(automationTick)
     try {
       if (wakeLock?.isHeld == true) {
         wakeLock?.release()

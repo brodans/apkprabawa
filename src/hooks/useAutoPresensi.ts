@@ -34,6 +34,7 @@ import type { ServerContext } from '../lib/apiCalls';
 import { bacaTitik } from '../lib/lokasiTersimpan';
 import {
   showAndroidNotification,
+  requestAndroidNotificationPermission,
   startAndroidForegroundService,
   stopAndroidForegroundService,
 } from '../lib/androidBackgroundBridge';
@@ -271,6 +272,8 @@ export function useAutoPresensi({
   useEffect(() => {
     if (!aktif || !username || !ready) return;
 
+    requestAndroidNotificationPermission();
+
     // Aktifkan Android Foreground Service agar proses tidak dibunuh oleh OS di latar belakang
     startAndroidForegroundService(
       'PRABAWA Presensi Otomatis',
@@ -304,11 +307,14 @@ export function useAutoPresensi({
     const handleVisibility = () => {
       if (document.visibilityState === 'visible') void eksekusi();
     };
+    const handleBackgroundTick = () => { void eksekusi(); };
     document.addEventListener('visibilitychange', handleVisibility);
+    window.addEventListener('prabawa-background-tick', handleBackgroundTick);
 
     return () => {
       window.clearInterval(intervalId);
       document.removeEventListener('visibilitychange', handleVisibility);
+      window.removeEventListener('prabawa-background-tick', handleBackgroundTick);
       stopAndroidForegroundService();
     };
   }, [aktif, username, ready]);

@@ -12,6 +12,7 @@ interface AndroidPrabawaInterface {
   setOverlayMode?: (active: boolean) => void;
   startForegroundService?: (title?: string, content?: string) => void;
   stopForegroundService?: () => void;
+  requestNotificationPermission?: () => void;
   showNotification?: (title: string, message: string) => boolean;
   isIgnoringBatteryOptimizations?: () => boolean;
   requestBatteryOptimizationExemption?: () => void;
@@ -51,6 +52,15 @@ export function stopAndroidForegroundService(): void {
     getAndroidBridge()?.stopForegroundService?.();
   } catch (err) {
     console.warn('[AndroidBridge] Gagal menghentikan Foreground Service:', err);
+  }
+}
+
+/** Minta izin notifikasi Android 13+ agar status service dan hasil presensi terlihat. */
+export function requestAndroidNotificationPermission(): void {
+  try {
+    getAndroidBridge()?.requestNotificationPermission?.();
+  } catch (err) {
+    console.warn('[AndroidBridge] Gagal meminta izin notifikasi:', err);
   }
 }
 
