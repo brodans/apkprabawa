@@ -83,6 +83,24 @@
     outline-offset: 0;
   }
 
+  /* Blue selection highlight.
+   *
+   * Android WebView tanpa aturan ini memakai warna selection default sistem
+   * (hitam pekat) yang tidak terlihat di atas background gelap. Aturan ini
+   * memaksa highlight biru transparan yang jelas di light maupun dark mode.
+   */
+  ::selection {
+    background: rgb(37 99 235 / 45%);
+  }
+  ::-moz-selection {
+    background: rgb(37 99 235 / 45%);
+  }
+
+  html.dark ::selection,
+  html.dark ::-moz-selection {
+    background: rgb(59 130 246 / 55%);
+  }
+
   /* Root container full viewport */
   #root {
     min-height: 100vh;
