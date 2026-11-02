@@ -190,11 +190,8 @@ class MainActivity : TauriActivity() {
           } else {
             startService(intent)
           }
-          // Simpan state agar BootReceiver & KeepaliveWorker tahu fitur aktif
           getSharedPreferences("prabawa_automasi", android.content.Context.MODE_PRIVATE)
             .edit().putBoolean("penjadwal_aktif", true).apply()
-          // WorkManager periodik 15 menit — tetap hidup meski app di-clear recents
-          PrabawaKeepaliveWorker.enqueue(this@MainActivity)
         } catch (e: Exception) {
           e.printStackTrace()
         }
@@ -219,10 +216,8 @@ class MainActivity : TauriActivity() {
             action = PrabawaForegroundService.ACTION_STOP
           }
           stopService(intent)
-          // Reset state SharedPreferences dan cancel WorkManager
           getSharedPreferences("prabawa_automasi", android.content.Context.MODE_PRIVATE)
             .edit().putBoolean("penjadwal_aktif", false).apply()
-          PrabawaKeepaliveWorker.cancel(this@MainActivity)
         } catch (e: Exception) {
           e.printStackTrace()
         }
@@ -790,8 +785,6 @@ const isiGradle = [
   '    implementation("androidx.activity:activity-ktx:1.10.1")',
   '    implementation("com.google.android.material:material:1.12.0")',
   '    implementation("androidx.lifecycle:lifecycle-process:2.10.0")',
-  '    // WorkManager — tetap hidup meski app di-clear dari recents',
-  '    implementation("androidx.work:work-runtime-ktx:2.9.0")',
   '    testImplementation("junit:junit:4.13.2")',
   '    androidTestImplementation("androidx.test.ext:junit:1.1.4")',
   '    androidTestImplementation("androidx.test.espresso:espresso-core:3.5.0")',
@@ -803,7 +796,7 @@ writeFileSync(gradle, isiGradle);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PrabawaBootReceiver.kt — restart ForegroundService setelah HP reboot/update
-// Menggunakan RECEIVE_BOOT_COMPLETED permission yang sudah ada di manifest.
+// Tidak ada dependency baru — hanya pakai API Android standar.
 // ─────────────────────────────────────────────────────────────────────────────
 const bootReceiver = join(root, 'java/id/go/jatim/prabawa/PrabawaBootReceiver.kt');
 put(bootReceiver, `package id.go.jatim.prabawa
@@ -813,14 +806,10 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.util.Log
-import androidx.work.ExistingPeriodicWorkPolicy
-import androidx.work.PeriodicWorkRequestBuilder
-import androidx.work.WorkManager
-import java.util.concurrent.TimeUnit
 
 /**
- * BroadcastReceiver untuk BOOT_COMPLETED & MY_PACKAGE_REPLACED.
- * Otomatis menyalakan ForegroundService tanpa user harus buka app.
+ * Otomatis menyalakan ForegroundService setelah HP restart atau APK diupdate,
+ * tanpa user perlu membuka aplikasi secara manual.
  */
 class PrabawaBootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
@@ -831,111 +820,29 @@ class PrabawaBootReceiver : BroadcastReceiver() {
 
         Log.d("PrabawaBoot", "Received: \$act")
 
+        // Hanya restart jika user sebelumnya memang mengaktifkan penjadwal
         val prefs = context.getSharedPreferences("prabawa_automasi", Context.MODE_PRIVATE)
         if (!prefs.getBoolean("penjadwal_aktif", false)) {
-            Log.d("PrabawaBoot", "Penjadwal tidak aktif, skip")
+            Log.d("PrabawaBoot", "Penjadwal tidak aktif, skip restart")
             return
         }
 
-        val serviceIntent = android.content.Intent(context, PrabawaForegroundService::class.java).apply {
-            action = PrabawaForegroundService.ACTION_START
-            putExtra(PrabawaForegroundService.EXTRA_TITLE, "PRABAWA Presensi Otomatis")
-            putExtra(PrabawaForegroundService.EXTRA_CONTENT, "Penjadwal presensi aktif memantau jadwal harian")
-        }
         try {
+            val serviceIntent = android.content.Intent(context, PrabawaForegroundService::class.java).apply {
+                action = PrabawaForegroundService.ACTION_START
+                putExtra(PrabawaForegroundService.EXTRA_TITLE, "PRABAWA Presensi Otomatis")
+                putExtra(PrabawaForegroundService.EXTRA_CONTENT, "Penjadwal presensi aktif memantau jadwal harian")
+            }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 context.startForegroundService(serviceIntent)
             } else {
                 context.startService(serviceIntent)
             }
-            Log.d("PrabawaBoot", "ForegroundService started")
+            Log.d("PrabawaBoot", "ForegroundService berhasil distart")
         } catch (e: Exception) {
-            Log.e("PrabawaBoot", "startForegroundService gagal: \${e.message}")
-        }
-
-        try {
-            val req = PeriodicWorkRequestBuilder<PrabawaKeepaliveWorker>(15, TimeUnit.MINUTES).build()
-            WorkManager.getInstance(context).enqueueUniquePeriodicWork(
-                PrabawaKeepaliveWorker.WORK_NAME,
-                ExistingPeriodicWorkPolicy.UPDATE,
-                req
-            )
-            Log.d("PrabawaBoot", "WorkManager enqueued")
-        } catch (e: Exception) {
-            Log.e("PrabawaBoot", "WorkManager enqueue gagal: \${e.message}")
+            Log.e("PrabawaBoot", "Gagal start ForegroundService: \${e.message}")
         }
     }
 }
 `);
-
-// ─────────────────────────────────────────────────────────────────────────────
-// PrabawaKeepaliveWorker.kt — WorkManager periodik 15 menit
-// Menjamin ForegroundService tetap berjalan meski app di-clear dari recents.
-// ─────────────────────────────────────────────────────────────────────────────
-const keepaliveWorker = join(root, 'java/id/go/jatim/prabawa/PrabawaKeepaliveWorker.kt');
-put(keepaliveWorker, `package id.go.jatim.prabawa
-
-import android.content.Context
-import android.os.Build
-import android.util.Log
-import androidx.work.CoroutineWorker
-import androidx.work.ExistingPeriodicWorkPolicy
-import androidx.work.PeriodicWorkRequestBuilder
-import androidx.work.WorkManager
-import androidx.work.WorkerParameters
-import java.util.concurrent.TimeUnit
-
-class PrabawaKeepaliveWorker(
-    private val ctx: Context,
-    params: WorkerParameters,
-) : CoroutineWorker(ctx, params) {
-
-    companion object {
-        const val WORK_NAME = "prabawa_keepalive"
-
-        fun enqueue(context: Context) {
-            try {
-                val req = PeriodicWorkRequestBuilder<PrabawaKeepaliveWorker>(15, TimeUnit.MINUTES).build()
-                WorkManager.getInstance(context).enqueueUniquePeriodicWork(
-                    WORK_NAME, ExistingPeriodicWorkPolicy.UPDATE, req
-                )
-            } catch (e: Exception) {
-                Log.e("PrabawaWorker", "enqueue gagal: \${e.message}")
-            }
-        }
-
-        fun cancel(context: Context) {
-            try { WorkManager.getInstance(context).cancelUniqueWork(WORK_NAME) }
-            catch (e: Exception) { Log.e("PrabawaWorker", "cancel gagal: \${e.message}") }
-        }
-    }
-
-    override suspend fun doWork(): Result {
-        val prefs = ctx.getSharedPreferences("prabawa_automasi", Context.MODE_PRIVATE)
-        if (!prefs.getBoolean("penjadwal_aktif", false)) return Result.success()
-
-        val serviceIntent = android.content.Intent(ctx, PrabawaForegroundService::class.java).apply {
-            action = PrabawaForegroundService.ACTION_START
-            putExtra(PrabawaForegroundService.EXTRA_TITLE, "PRABAWA Presensi Otomatis")
-            putExtra(PrabawaForegroundService.EXTRA_CONTENT, "Penjadwal presensi aktif memantau jadwal harian")
-        }
-        return try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) ctx.startForegroundService(serviceIntent)
-            else ctx.startService(serviceIntent)
-            Result.success()
-        } catch (e: Exception) {
-            Log.e("PrabawaWorker", "start service gagal: \${e.message}")
-            Result.retry()
-        }
-    }
-}
-`);
-
-console.log('\n✅ Semua patch Android selesai!');
-console.log('   ├── AndroidManifest: 8 permissions + ForegroundService (specialUse) + BootReceiver (priority 999, directBootAware)');
-console.log('   ├── build.gradle.kts: + androidx.work:work-runtime-ktx:2.9.0');
-console.log('   ├── MainActivity.kt: PrabawaBridge (identik versi Bagus) + SharedPrefs + WorkManager.enqueue');
-console.log('   ├── PrabawaForegroundService.kt: START_STICKY + PARTIAL_WAKE_LOCK + automationTick');
-console.log('   ├── PrabawaNotificationHelper.kt: IMPORTANCE_HIGH');
-console.log('   ├── PrabawaBootReceiver.kt: BOOT_COMPLETED + MY_PACKAGE_REPLACED (tanpa Activity)');
-console.log('   └── PrabawaKeepaliveWorker.kt: WorkManager periodik 15 menit');
+console.log('✅ PrabawaBootReceiver.kt ditulis');
