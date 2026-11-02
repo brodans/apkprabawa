@@ -130,7 +130,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import id.go.jatim.prabawa.TauriActivity
 
-private object AutomationWebView {
+internal object AutomationWebView {
   @Volatile var instance: WeakReference<WebView>? = null
 
   fun requestCheck() {
