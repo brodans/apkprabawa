@@ -135,7 +135,6 @@ import android.view.WindowManager
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import java.lang.ref.WeakReference
-import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -165,10 +164,9 @@ class MainActivity : TauriActivity() {
     fun setTheme(dark: Boolean) {
       mainHandler.post {
         appThemeIsDark = dark
-        // Paksa Android reload theme resource (values/ vs values-night/) agar
-        // floating toolbar selection Android ikut tema yang benar — bukan kotak putih/hitam
-        val nightMode = if (dark) AppCompatDelegate.MODE_NIGHT_YES else AppCompatDelegate.MODE_NIGHT_NO
-        AppCompatDelegate.setDefaultNightMode(nightMode)
+        // JANGAN paksa AppCompatDelegate night mode — popup bawaan Android
+        // (text selection, context menu dsb.) harus ikut tema bawaan device
+        // masing-masing, bukan tema yang dipaksa lewat proses ini.
         applySystemBarTheme()
       }
     }
@@ -725,17 +723,57 @@ object PrabawaNotificationHelper {
 }
 `);
 
-put(join(root, 'res/values/colors.xml'), `<resources><color name="splash_background">#F8FAFC</color><color name="splash_icon_background">#F8FAFC</color><color name="colorSurface">#F8FAFC</color><color name="colorOnSurface">#0B1120</color><color name="colorPrimary">#2563EB</color></resources>
-`);
+put(join(root, 'res/values/colors.xml'), `<resources>
+  <color name="splash_background">#F8FAFC</color>
+  <color name="splash_icon_background">#F8FAFC</color>
+</resources>\n`);
 
-put(join(root, 'res/values-night/colors.xml'), `<resources><color name="splash_background">#0B1120</color><color name="splash_icon_background">#0B1120</color><color name="colorSurface">#0B1120</color><color name="colorOnSurface">#E2E8F0</color><color name="colorPrimary">#60A5FA</color></resources>
-`);
+put(join(root, 'res/values-night/colors.xml'), `<resources>
+  <color name="splash_background">#0B1120</color>
+  <color name="splash_icon_background">#0B1120</color>
+</resources>\n`);
 
-put(join(root, 'res/values/themes.xml'), `<resources xmlns:tools="http://schemas.android.com/tools"><style name="Theme.app" parent="Theme.Material3.Light.NoActionBar"><item name="android:windowLightStatusBar">true</item><item name="android:statusBarColor">@android:color/transparent</item><item name="android:windowLightNavigationBar">true</item><item name="android:navigationBarColor">@android:color/transparent</item><item name="android:enforceStatusBarContrast" tools:targetApi="29">false</item><item name="android:enforceNavigationBarContrast" tools:targetApi="29">false</item><item name="android:background">@color/splash_background</item><item name="android:windowBackground">@drawable/splash_screen</item><item name="android:colorBackground">@color/splash_background</item><item name="colorSurface">@color/colorSurface</item><item name="colorOnSurface">@color/colorOnSurface</item><item name="colorPrimary">@color/colorPrimary</item><item name="colorOnPrimary">#FFFFFF</item><item name="android:textColorHighlight">#552563EB</item><item name="android:windowActionModeOverlay">true</item><item name="android:windowNoTitle">true</item><item name="android:windowSplashScreenBackground">@color/splash_background</item><item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_icon</item><item name="android:windowSplashScreenIconBackgroundColor">@color/splash_icon_background</item></style><style name="Theme.prabawa" parent="Theme.app" /></resources>
-`);
+// Popup bawaan Android (text selection, context menu, dll) harus memakai
+// tema asli Material3 device masing-masing — tanpa override colorSurface /
+// textColorHighlight supaya tidak gelap-gelap-an / tidak kebaca.
+// Light theme — hanya splash & status bar, sisanya default Material3.
+const themeXmlDay = `<resources xmlns:tools="http://schemas.android.com/tools">
+  <style name="Theme.app" parent="Theme.Material3.Light.NoActionBar">
+    <item name="android:windowLightStatusBar">true</item>
+    <item name="android:statusBarColor">@android:color/transparent</item>
+    <item name="android:windowLightNavigationBar">true</item>
+    <item name="android:navigationBarColor">@android:color/transparent</item>
+    <item name="android:enforceStatusBarContrast" tools:targetApi="29">false</item>
+    <item name="android:enforceNavigationBarContrast" tools:targetApi="29">false</item>
+    <item name="android:windowBackground">@drawable/splash_screen</item>
+    <item name="android:windowNoTitle">true</item>
+    <item name="android:windowSplashScreenBackground">@color/splash_background</item>
+    <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_icon</item>
+    <item name="android:windowSplashScreenIconBackgroundColor">@color/splash_icon_background</item>
+  </style>
+  <style name="Theme.prabawa" parent="Theme.app" />
+</resources>\n`;
 
-put(join(root, 'res/values-night/themes.xml'), `<resources xmlns:tools="http://schemas.android.com/tools"><style name="Theme.app" parent="Theme.Material3.Dark.NoActionBar"><item name="android:windowLightStatusBar">false</item><item name="android:statusBarColor">@android:color/transparent</item><item name="android:windowLightNavigationBar">false</item><item name="android:navigationBarColor">@android:color/transparent</item><item name="android:enforceStatusBarContrast" tools:targetApi="29">false</item><item name="android:enforceNavigationBarContrast" tools:targetApi="29">false</item><item name="android:background">@color/splash_background</item><item name="android:windowBackground">@drawable/splash_screen</item><item name="android:colorBackground">@color/splash_background</item><item name="colorSurface">@color/colorSurface</item><item name="colorOnSurface">@color/colorOnSurface</item><item name="colorPrimary">@color/colorPrimary</item><item name="colorOnPrimary">#FFFFFF</item><item name="android:textColorHighlight">#5560A5FA</item><item name="android:windowActionModeOverlay">true</item><item name="android:windowNoTitle">true</item><item name="android:windowSplashScreenBackground">@color/splash_background</item><item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_icon</item><item name="android:windowSplashScreenIconBackgroundColor">@color/splash_icon_background</item></style><style name="Theme.prabawa" parent="Theme.app" /></resources>
-`);
+// Dark theme — sama, hanya splash & status bar, sisanya default Material3.
+const themeXmlNight = `<resources xmlns:tools="http://schemas.android.com/tools">
+  <style name="Theme.app" parent="Theme.Material3.Dark.NoActionBar">
+    <item name="android:windowLightStatusBar">false</item>
+    <item name="android:statusBarColor">@android:color/transparent</item>
+    <item name="android:windowLightNavigationBar">false</item>
+    <item name="android:navigationBarColor">@android:color/transparent</item>
+    <item name="android:enforceStatusBarContrast" tools:targetApi="29">false</item>
+    <item name="android:enforceNavigationBarContrast" tools:targetApi="29">false</item>
+    <item name="android:windowBackground">@drawable/splash_screen</item>
+    <item name="android:windowNoTitle">true</item>
+    <item name="android:windowSplashScreenBackground">@color/splash_background</item>
+    <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_icon</item>
+    <item name="android:windowSplashScreenIconBackgroundColor">@color/splash_icon_background</item>
+  </style>
+  <style name="Theme.prabawa" parent="Theme.app" />
+</resources>\n`;
+
+put(join(root, 'res/values/themes.xml'), themeXmlDay);
+put(join(root, 'res/values-night/themes.xml'), themeXmlNight);
 
 const gradle = join(process.cwd(), 'src-tauri/gen/android/app/build.gradle.kts');
 const isiGradle = [
