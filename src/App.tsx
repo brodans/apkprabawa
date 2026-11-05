@@ -1020,53 +1020,75 @@ function MainApp({ onLogout, isDarkMode, toggleDarkMode }: { onLogout: () => voi
     }
 
     let hidup = true;
+    let waktuHabis = false;
+    const timerAutoLogin = window.setTimeout(() => {
+      if (!hidup) return;
+      waktuHabis = true;
+      setServerConnected(false);
+      setServerLoginError(
+        'Koneksi server pusat memerlukan waktu terlalu lama. Periksa internet lalu coba login ulang dari Beranda.'
+      );
+      setServerAutoLoginPending(false);
+    }, 60_000);
     setServerLoginError('Menghubungkan server pusat…');
     setServerAutoLoginPending(true);
 
     void (async () => {
-      const hasil = await mulaiAutoLogin(username);
-      if (!hidup) return;
+      try {
+        const hasil = await mulaiAutoLogin(username);
+        if (!hidup || waktuHabis) return;
 
-      const profil = hasil.profile;
-      if (profil && (hasil.status === 'berhasil' || hasil.status === 'dari-cache')) {
-        // Sesi dari cache perlu diuji dulu: `api_key` bisa sudah dicabut
-        // server, dan tanpa pemeriksaan `useServerContext` akan menganggap
-        // sesi siap lalu semua panggilan gagal dengan "Koneksi gagal".
-        if (hasil.status === 'dari-cache' && hasil.imei) {
-          const valid = await tokenMasihValid({ apiKey: profil.apiKey, imei: hasil.imei });
-          if (!hidup) return;
-          if (!valid) {
-            // Cache ditolak — paksa login ulang dari kredensial terenkripsi.
-            const { promise } = ulangAutoLoginTanpaCache(username);
-            const ulang = await promise;
-            if (!hidup) return;
-            if (ulang.profile) {
-              setProfilServer(ulang.profile, ulang.imei);
+        const profil = hasil.profile;
+        if (profil && (hasil.status === 'berhasil' || hasil.status === 'dari-cache')) {
+          // Sesi dari cache perlu diuji dulu: `api_key` bisa sudah dicabut
+          // server, dan tanpa pemeriksaan `useServerContext` akan menganggap
+          // sesi siap lalu semua panggilan gagal dengan "Koneksi gagal".
+          if (hasil.status === 'dari-cache' && hasil.imei) {
+            const valid = await tokenMasihValid({ apiKey: profil.apiKey, imei: hasil.imei });
+            if (!hidup || waktuHabis) return;
+            if (!valid) {
+              // Cache ditolak — paksa login ulang dari kredensial terenkripsi.
+              const { promise } = ulangAutoLoginTanpaCache(username);
+              const ulang = await promise;
+              if (!hidup || waktuHabis) return;
+              if (ulang.profile) {
+                setProfilServer(ulang.profile, ulang.imei);
+                return;
+              }
+              setServerConnected(false);
+              setServerLoginError(ulang.pesan ?? 'Sesi server sudah tidak berlaku. Silakan masuk ulang.');
               return;
             }
-            setServerConnected(false);
-            setServerLoginError(ulang.pesan ?? 'Sesi server sudah tidak berlaku. Silakan masuk ulang.');
-            setServerAutoLoginPending(false);
-            return;
           }
+          setProfilServer(profil, hasil.imei);
+          return;
         }
-        setProfilServer(profil, hasil.imei);
-        return;
-      }
 
-      // Gagal — alasannya diteruskan ke `BannerServerPusat`, yang menampilkannya
-      // di halaman mana pun. Sebelumnya hanya dirender di Beranda, jadi orang
-      // yang sedang di Presensi atau Laporan tidak pernah melihatnya.
-      setServerConnected(false);
-      setServerLoginError(
-        hasil.status === 'belum-ada-kredensial' ? null : hasil.pesan ?? 'Gagal menghubungi server pusat.'
-      );
-      setServerAutoLoginPending(false);
+        // Gagal — alasannya diteruskan ke `BannerServerPusat`, yang menampilkannya
+        // di halaman mana pun. Sebelumnya hanya dirender di Beranda, jadi orang
+        // yang sedang di Presensi atau Laporan tidak pernah melihatnya.
+        setServerConnected(false);
+        setServerLoginError(
+          hasil.status === 'belum-ada-kredensial' ? null : hasil.pesan ?? 'Gagal menghubungi server pusat.'
+        );
+      } catch (error) {
+        if (!hidup || waktuHabis) return;
+        setServerConnected(false);
+        setServerLoginError(
+          error instanceof Error ? error.message : 'Gagal menghubungi server pusat.'
+        );
+      } finally {
+        if (hidup && !waktuHabis) {
+          window.clearTimeout(timerAutoLogin);
+          setServerAutoLoginPending(false);
+        }
+      }
     })();
 
     // Tidak ada `abort()` di sini — lihat catatan di atas.
     return () => {
       hidup = false;
+      window.clearTimeout(timerAutoLogin);
     };
   }, [currentUser?.username, setServerLoginError, setServerConnected, setServerAutoLoginPending, setProfilServer]);
 

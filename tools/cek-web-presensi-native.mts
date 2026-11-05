@@ -2,13 +2,14 @@
  * Verifikasi jembatan captcha native Tauri tanpa menghubungi server pusat.
  */
 const panggilan: Array<Record<string, unknown>> = [];
+let statusHalamanLogin = 200;
 const state = {
   __TAURI_INTERNALS__: {
     invoke: async (command: string, args: Record<string, unknown>) => {
       panggilan.push({ command, ...args });
       if (command !== 'web_presensi_request') throw new Error(`Command tak dikenal: ${command}`);
       if (args.path === '/ep/p/') {
-        return { status: 200, contentType: 'text/html', body: '<html>login</html>' };
+        return { status: statusHalamanLogin, contentType: 'text/html', body: '<html>login</html>' };
       }
       if (args.path === '/ep/p/login') {
         return { status: 200, contentType: 'text/html', body: '<html>login berhasil</html>' };
@@ -52,6 +53,19 @@ cek('form login Web diteruskan ke host native', kirimLogin?.method === 'POST' &&
   formLogin.get('m_user[email]') === '198501012015011001' &&
   formLogin.get('m_user[password]') === 'sandiuji' &&
   formLogin.get('m_user[CAPTCHA]') === '1234');
+
+const jumlahSebelumDitolak = panggilan.length;
+statusHalamanLogin = 403;
+let pesanCaptchaDitolak = '';
+try {
+  await muatCaptcha();
+} catch (error) {
+  pesanCaptchaDitolak = error instanceof Error ? error.message : String(error);
+}
+cek('server menolak halaman Web Presensi dengan pesan yang jelas',
+  pesanCaptchaDitolak.includes('HTTP 403'));
+cek('captcha tidak diminta ketika sesi halaman login ditolak',
+  panggilan.length === jumlahSebelumDitolak + 1);
 
 URL.revokeObjectURL(hasil.url);
 console.log(fail === 0 ? '\nSEMUA LULUS' : `\n${fail} KEGAGALAN`);

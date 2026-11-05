@@ -335,7 +335,10 @@ async fn web_presensi_request(
             .header(reqwest::header::USER_AGENT, &user_agent)
             .header(reqwest::header::ACCEPT_LANGUAGE, &accept_language)
             .header(reqwest::header::REFERER, format!("{EPRESENSI_ORIGIN}/"))
-            .header(reqwest::header::ORIGIN, EPRESENSI_ORIGIN);
+            .header(reqwest::header::ORIGIN, EPRESENSI_ORIGIN)
+            .header("sec-fetch-site", "same-origin")
+            .header("sec-fetch-mode", "cors")
+            .header("sec-fetch-dest", "empty");
         if let Some(content_type) = content_type.as_deref() {
             request = request.header(reqwest::header::CONTENT_TYPE, content_type);
         }

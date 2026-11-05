@@ -199,20 +199,35 @@ export interface CaptchaResult {
 export async function muatCaptcha(): Promise<CaptchaResult> {
   let base = PROXY;
   try {
-    await req(`${base}/p/`);
+    const halaman = await req(`${base}/p/`);
+    if (!halaman.ok) {
+      throw new Error(
+        `Server e-Presensi menolak halaman login (HTTP ${halaman.status}). Periksa koneksi atau coba lagi.`
+      );
+    }
     let res = await req(`${base}/p/captcha?r=${Math.random()}&reload=1`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const blob = await res.blob();
-    if (!blob.type.includes('image')) throw new Error('respons bukan gambar');
+    if (!blob.size || !blob.type.toLowerCase().startsWith('image/')) {
+      throw new Error(`respons bukan gambar (${blob.type || 'Content-Type kosong'})`);
+    }
     return { url: URL.createObjectURL(blob) };
   } catch (error) {
     if (berjalanDiTauri() || base === PROXY_FALLBACK) throw error;
     base = PROXY_FALLBACK;
   }
-  await req(`${base}/p/`);
+  const halaman = await req(`${base}/p/`);
+  if (!halaman.ok) {
+    throw new Error(
+      `Server e-Presensi menolak halaman login (HTTP ${halaman.status}). Periksa koneksi atau coba lagi.`
+    );
+  }
   const res = await req(`${base}/p/captcha?r=${Math.random()}&reload=1`);
   if (!res.ok) throw new Error(`Gagal memuat captcha (HTTP ${res.status})`);
   const blob = await res.blob();
+  if (!blob.size || !blob.type.toLowerCase().startsWith('image/')) {
+    throw new Error(`Server tidak mengirim gambar captcha (${blob.type || 'Content-Type kosong'}).`);
+  }
   return { url: URL.createObjectURL(blob) };
 }
 

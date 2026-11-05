@@ -668,6 +668,7 @@ export default function WebPresensi() {
   const refreshCaptcha = useCallback(async (alasan = '') => {
     setLoadingCaptcha(true);
     simpanCaptcha('');
+    setCaptchaImg(null);
     setCaptchaInfo(alasan || 'Memuat captcha...');
 
 
@@ -1128,12 +1129,23 @@ export default function WebPresensi() {
              */}
             <div className="order-1 flex items-center gap-2 sm:order-2">
               <div
-                className={`relative h-11 w-[191px] shrink-0 overflow-hidden rounded-none border ${
+                className={`relative h-11 w-[191px] shrink-0 overflow-hidden rounded-md border ${
                   captchaImg ? 'border-black bg-black' : 'border-dashed border-slate-300 bg-white dark:border-slate-600'
                 }`}
+                aria-label={captchaImg ? 'Gambar captcha siap' : 'Gambar captcha sedang dimuat'}
                 aria-busy={loadingCaptcha}
               >
-                {captchaImg && <img src={captchaImg} alt="Captcha" className="h-full w-full object-contain" />}
+                {captchaImg && (
+                  <img
+                    src={captchaImg}
+                    alt="Kode captcha"
+                    className="h-full w-full object-contain"
+                    onError={() => {
+                      setCaptchaImg(null);
+                      setCaptchaInfo('⚠ Gambar captcha gagal ditampilkan. Tekan muat ulang untuk mencoba lagi.');
+                    }}
+                  />
+                )}
                 {loadingCaptcha && <div className="captcha-shimmer absolute inset-0" aria-hidden="true" />}
               </div>
               <button type="button" onClick={() => refreshCaptcha()} disabled={loadingCaptcha}
@@ -1145,7 +1157,15 @@ export default function WebPresensi() {
           </div>
         )}
 
-        {!sudahLogin && !memulihkanSesi && captchaInfo && <p className="text-[11px] text-slate-400 dark:text-slate-500 italic">{captchaInfo}</p>}
+        {!sudahLogin && !memulihkanSesi && captchaInfo && (
+          <p
+            className={`text-xs ${captchaInfo.startsWith('⚠') ? 'text-rose-600 dark:text-rose-400' : 'text-slate-500 dark:text-slate-400'}`}
+            role={captchaInfo.startsWith('⚠') ? 'alert' : 'status'}
+            aria-live="polite"
+          >
+            {captchaInfo}
+          </p>
+        )}
 
         {status && (
           <div className="flex items-center gap-2 text-sm text-indigo-600 dark:text-indigo-400">
