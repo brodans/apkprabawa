@@ -276,7 +276,7 @@ cek('profile release mengoptimalkan ukuran dan menghapus symbols',
   /\[profile\.release\][\s\S]*?opt-level\s*=\s*"z"[\s\S]*?lto\s*=\s*true[\s\S]*?codegen-units\s*=\s*1[\s\S]*?strip\s*=\s*"symbols"/.test(cargoRelease));
 const nativePatch = readFileSync(join(root, 'tools/patch-android-native.mts'), 'utf8');
 cek('tema navbar Android diserialkan di UI thread',
-  /fun setTheme\(dark: Boolean\)\s*\{\s*mainHandler\.post \{ applySystemBarTheme\(dark\) \}/.test(nativePatch) &&
+  /fun setTheme\(dark: Boolean\)\s*\{\s*mainHandler\.post\s*\{[\s\S]{0,220}?appThemeIsDark = dark[\s\S]{0,280}?applySystemBarTheme\(\)/.test(nativePatch) &&
     /window\.navigationBarColor = Color\.TRANSPARENT/.test(nativePatch) &&
     /controller\.isAppearanceLightNavigationBars = !isDark/.test(nativePatch) &&
     /val workspaceColor = if \(isDark\) Color\.parseColor\("#0B1120"\) else Color\.parseColor\("#F8FAFC"\)/.test(nativePatch) &&

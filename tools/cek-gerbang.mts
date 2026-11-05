@@ -16,8 +16,7 @@
  * 4. Gerbang memanggil `resetAutoLogin()` + `clearServerSessionCache()`
  *    saat terkunci — tanpa itu, auto-login tetap jalan dan pengguna masih
  *    bisa absen tanpa membayar.
- * 5. Gerbang dilewati kalau Firestore belum siap (kalau tidak, seluruh
- *    aplikasi terkunci permanen karena pembayaran juga butuh Firestore).
+ * 5. Gerbang gagal tertutup jika status langganan belum dapat diverifikasi.
  * 6. Dialog pembayaran terbuka otomatis dan tetap ada tombolnya.
  * 7. Admin **tidak** punya tombol mencatat pembayaran.
  */
@@ -170,13 +169,10 @@ cek('import resetAutoLogin dari modul yang benar', gateSrc.includes("from '../li
 cek('efek auto-login ada di dalam MainApp', /function MainApp\(/.test(appKode) && /mulaiAutoLogin\(username\)/.test(appKode));
 
 // ═════════════════════════════════════════════════════════════════════
-console.log('\n=== 5. Gerbang dilewati kalau Firestore belum siap');
-cek('cek isFirebaseReady', /if \(!isFirebaseReady\(\) \|\| !ringkasan\) \{/.test(gateKode));
-cek(
-  'melewatkan children saat Firestore kosong',
-  /if \(!isFirebaseReady\(\) \|\| !ringkasan\) \{\s*return <>\{children\}<\/>;/.test(gateKode)
-);
-cek('kasih alasan di komentar', /terkunci permanen/.test(gateSrc));
+console.log('\n=== 5. Gerbang gagal tertutup jika status langganan belum diketahui');
+cek('status langganan kosong tidak melewatkan children', /if \(!ringkasan\) \{[\s\S]{0,400}?role="alert"/.test(gateKode));
+cek('galat verifikasi disimpan dan ditampilkan', /setMuatError\(pesan\)/.test(gateKode) && /muatError \?\?/.test(gateKode));
+cek('pengguna dapat mencoba ulang atau keluar', /Coba lagi/.test(gateSrc) && /onClick=\{onKeluar\}/.test(gateKode));
 cek(
   'layar langganan habis punya tinggi viewport dan area konten yang bisa digulir',
   /className="flex h-dvh min-h-0 flex-col overflow-hidden/.test(gateSrc) &&
@@ -252,11 +248,12 @@ cek('status dicek ulang selama menunggu dengan interval hemat',
   /JEDA_CEK_VERIFIKASI_MS = 5000/.test(gateSrc) &&
     /setInterval\(\(\) => \{\s*void muatStatusLangganan\(\);/.test(gateSrc));
 cek('polling status hanya membaca langganan dan bukan seluruh billing/tagihan',
-  /const muatStatusLangganan = useCallback[\s\S]*?loadLangganan\(username, true\)[\s\S]*?setRingkasan/.test(gateSrc) &&
+  /const muatStatusLangganan = useCallback[\s\S]*?loadLangganan\(username\)[\s\S]*?setRingkasan/.test(gateSrc) &&
     !/setInterval\(\(\) => \{\s*void muat\(\);/.test(gateSrc));
-cek('polling meneruskan galat jaringan dan mempertahankan status terakhir',
-  /teruskanGalatJaringan = false/.test(baca('../src/lib/langgananFirestore.ts')) &&
-    /teruskanGalatJaringan\s*\?\s*await panelBatal/.test(baca('../src/lib/langgananFirestore.ts')));
+cek('pembacaan status langganan meneruskan galat jaringan',
+  /loadLangganan\(username: string\)[\s\S]{0,180}?await panelBatal/.test(
+    baca('../src/lib/langgananFirestore.ts')
+  ));
 cek('keluar begitu langganan aktif', /if \(!bolehMasuk\(ringkasan, role\)\) return;\s*hapusTungguVerifikasi\(\);\s*setTunggu\(null\);/.test(gateKode));
 cek('kehabisan waktu mengembalikan ke pembayaran', /setBayar\(true\);\s*toast\.info\(/.test(gateKode));
 cek('layar tunggu dirender sebelum cek boleh-masuk', gateKode.indexOf('<LayarTungguVerifikasi') < gateKode.indexOf('if (bolehMasuk(ringkasan, role)) {\n    return <>{children}</>;'));

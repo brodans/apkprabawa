@@ -10,15 +10,10 @@
  * dan masa akhir  jadi mengimpor `langganan.ts` berarti menarik seluruh
  * SDK Firebase *klien* ke dalam bundel server.
  *
- * Akibatnya `dist/server.cjs` ikut memuat `src/lib/firebase.ts`, yang
- * membaca konfigurasinya dari `import.meta.env`. Bundel itu CJS, jadi
- * `import.meta.env` kosong, semua kunci dianggap hilang, dan modul itu
- * mencetak:
- *
- *     [firebase] Konfigurasi belum lengkap (...). Mode demo aktif.
- *
- * di layar Admin **setiap kali server dinyalakan**  padahal server
- * tidak memakai SDK klien sama sekali, ia memakai Admin SDK yang
+ * Akibatnya bundel server ikut memuat Firebase SDK klien dan membaca
+ * konfigurasinya dari `import.meta.env`. Bundel itu CJS, jadi `import.meta.env`
+ * kosong, dan modul tersebut menampilkan peringatan konfigurasi yang salah
+ * setiap kali server dinyalakan, padahal server memakai Admin SDK yang
  * kredensialnya dari `FIREBASE_SERVICE_ACCOUNT`. Pesan itu salah, dan
  * pesanan yang salah di layar server membuat orang mengira sistemnya
  * rusak.

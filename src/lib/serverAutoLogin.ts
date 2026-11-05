@@ -376,8 +376,8 @@ export async function cobaAutoLogin(
   //  Yang berubah: password server pusat **tidak lagi melewati peramban**.
   //
   // Semula langkah ini membaca `kredensial_server__{username}` langsung dari
-  // Firestore dan mendekripsi `AES(password, VITE_APP_SECRET)` di browser 
-  // dengan kunci yang ada di bundle, jadi seluruh password server pusat bisa
+  // Firestore dan mendekripsi password di browser dengan kunci yang ada di
+  // bundle, jadi seluruh password server pusat bisa
   // diambil dari Firebase Console lalu didekripsi di luar aplikasi. Sekarang
   // server mendekripsi dan memanggil gateway; yang kembali ke sini hanya
   // `api_key` dan profil.

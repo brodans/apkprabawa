@@ -16,8 +16,8 @@
  * menebak-nebak `orderId` dan menghabiskan kuota API merchant. Endpoint itu
  * memang tak terpakai, jadi tidak ada yang kehilangan kemampuan apa pun.
  *
- * `Client Key` memang aman di sisi peramban (itu memang desain Snap),
- * jadi hanya itu yang dibaca dari `import.meta.env`.
+ * `Client Key` memang publik menurut desain Snap, tetapi tetap harus
+ * disediakan saat build dan tidak memiliki nilai bawaan di source.
  *
  * ## Midtrans opsional
  *
@@ -82,10 +82,7 @@ export function cekMidtransServer(): Promise<boolean> {
 
 /** Client key untuk Snap — aman di peramban, bukan rahasia. */
 function midtransClientKey(): string {
-  return (
-    import.meta.env?.VITE_MIDTRANS_CLIENT_KEY?.trim() ||
-    'Mid-client-IULEtYavZ4WoulM6'
-  );
+  return import.meta.env?.VITE_MIDTRANS_CLIENT_KEY?.trim() ?? '';
 }
 
 /** Sumber Snap yang sesuai mode. */

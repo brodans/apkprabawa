@@ -6,7 +6,6 @@ import { useToast } from './ui/Toast';
 import { batalkanTagihan } from '../lib/akunFirestore';
 import { clearServerSessionCache } from '../lib/cacheManager';
 import { resetAutoLogin } from '../lib/serverAutoLogin';
-import { isFirebaseReady } from '../lib/firebase';
 import {
   STATUS_LABEL,
   STATUS_TONE,
@@ -192,6 +191,7 @@ export default function GerbangLangganan({
   const [pengaturan, setPengaturan] = useState<PengaturanBilling | null>(null);
   const [tagihan, setTagihan] = useState<DokumenTagihan[]>([]);
   const [loading, setLoading] = useState(true);
+  const [muatError, setMuatError] = useState<string | null>(null);
   const [bayar, setBayar] = useState(false);
   /** Non-null selama masa tunggu verifikasi — lihat `LayarTungguVerifikasi`. */
   const [tunggu, setTunggu] = useState<InfoTungguVerifikasi | null>(null);
@@ -239,6 +239,7 @@ export default function GerbangLangganan({
     if (!username) return;
     const seq = ++muatanSeq.current;
     const usang = () => seq !== muatanSeq.current;
+    setMuatError(null);
     try {
       /*
        * Impor dinamis, bukan statis di atas file.
@@ -282,7 +283,9 @@ export default function GerbangLangganan({
       setTagihan(daftarTagihan);
     } catch (err: any) {
       if (usang()) return;
-      toast.error(err?.message ?? 'Gagal memeriksa status langganan.');
+      const pesan = err?.message ?? 'Gagal memeriksa status langganan.';
+      setMuatError(pesan);
+      toast.error(pesan);
     } finally {
       if (!usang()) setLoading(false);
     }
@@ -293,7 +296,7 @@ export default function GerbangLangganan({
     const seq = ++muatanSeq.current;
     try {
       const { loadLangganan } = await import('../lib/langgananFirestore');
-      const doc = await loadLangganan(username, true);
+      const doc = await loadLangganan(username);
       if (seq !== muatanSeq.current) return;
       setRingkasan(ringkasanLangganan(username, doc, paketEfektif(pengaturan), role));
     } catch (err) {
@@ -456,33 +459,42 @@ export default function GerbangLangganan({
     return fallbackLoading ? <>{fallbackLoading}</> : null;
   }
 
-  /*
-   * ⚠️ Tanpa sumber kebenaran, gerbang **dikunci permanen** — jadi dilewati.
-   *
-   * Dua kondisi yang membuat `ringkasan` kosong:
-   *
-   * 1. `VITE_FIREBASE_*` belum terisi di peramban (`isFirebaseReady()` false).
-   * 2. Permintaan ke server gagal, jadi `loadLangganan()` mengembalikan
-   *    `null` — dokumen langganannya tidak terbaca.
-   *
-   * Kenapa gerbang dilewati, bukan diperketat: kalau gate tetap tertutup saat
-   * sumber kebacanya tidak ada, **setiap** akun terbaca "belum bayar" —
-   * termasuk yang sudah membayar. Dan tidak ada yang bisa membayar, karena
-   * pembayaran juga butuh dokumen yang sama. Hasilnya seluruh aplikasi
-   * terkunci dan tidak ada jalan keluar dari dalam aplikasi.
-   *
-   * ⚠️ Yang membuat "terkunci permanen" sulit noticed adalah bentuknya: aplikasi
-   * terbuka, tidak ada yang gagal, dan tidak ada yang complains. Perbaikan
-   * satu-satunya di luar aplikasi — `/api/health` yang melapor apakah
-   * kredensial Admin terpasang di server.
-   *
-   * Catatan: "tidak bisa login" **bukan** gejalanya. Autentikasi panel sudah
-   * pindah ke server (`POST /api/panel-auth`, yang memakai Admin SDK dan tidak
-   * butuh `VITE_*` sama sekali), jadi login tetap berhasil sementara status
-   * langganan tidak terbaca.
-   */
-  if (!isFirebaseReady() || !ringkasan) {
-    return <>{children}</>;
+  if (!ringkasan) {
+    return (
+      <main className="min-h-screen flex items-center justify-center p-6">
+        <section
+          role="alert"
+          className="w-full max-w-md rounded-2xl border border-red-500/20 bg-white p-6 text-center shadow-xl dark:bg-slate-900"
+        >
+          <AlertTriangle className="mx-auto mb-3 h-8 w-8 text-red-500" />
+          <h1 className="text-lg font-semibold">Status langganan belum dapat diverifikasi</h1>
+          <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+            {muatError ?? 'Periksa koneksi internet lalu coba lagi.'}
+          </p>
+          <div className="mt-5 flex justify-center gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                setLoading(true);
+                void muat();
+              }}
+              disabled={loading}
+              className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+            >
+              <RefreshCw className="h-4 w-4" />
+              Coba lagi
+            </button>
+            <button
+              type="button"
+              onClick={onKeluar}
+              className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium dark:border-slate-700"
+            >
+              Keluar
+            </button>
+          </div>
+        </section>
+      </main>
+    );
   }
 
   /*

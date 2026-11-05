@@ -1,18 +1,15 @@
 /**
  * Hash PIN/password panel  SHA-256  bcrypt.
  *
- * ## Kenapa modul ini dipisah dari `encryption.ts`
+ * ## Pemrosesan PIN selalu server-side
  *
- * `encryption.ts` membaca `VITE_APP_SECRET` dari `import.meta.env`. `import.meta`
- * hanya ada di bundel ESM peramban; di bundel CJS server (hasil esbuild
- * `src/api/server.ts`) tidak ada kutipan itu, jadi modul itu tidak boleh ikut
- * terbawa ke jalur server.
+ * Hashing dan verifikasi dijalankan di server; modul ini tidak membaca
+ * konfigurasi klien maupun `import.meta.env`.
  *
  * Yang di sini justru **harus** dipakai server: sejak autentikasi panel pindah
  * ke server (lihat `lib/panelServer.ts`), hashing dan verifikasi PIN adalah
  * pekerjaan server  bukan lagi pekerjaan peramban. Jadi fungsi-fungsi ini
- * dipisah ke modul yang bebas `import.meta`, dan `encryption.ts` meneruskannya
- * supaya pemanggil lama tidak ikut berubah.
+ * dipisah ke modul yang bebas `import.meta`.
  *
  * ## Bentuknya
  *

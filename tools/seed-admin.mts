@@ -15,7 +15,8 @@
  * ## Kenapa memakai `firebase-admin`, bukan SDK peramban
  *
  * Semula skrip ini memakai `firebase/app` + `firebase/firestore` — SDK
- * peramban, dengan `VITE_FIREBASE_API_KEY` dari `.env`. Itu tidak pernah bisa
+ * peramban; operasi Firestore Admin dijalankan server-side dengan service
+ * account yang dikonfigurasi di environment runtime. Itu tidak pernah bisa
  * berhasil:
  *
  * ```

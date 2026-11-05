@@ -43,7 +43,7 @@ import { unduhTeks } from '../lib/unduh';
  * ⚠️ Lampiran TIDAK lagi dikirim sebagai base64 di dalam `add_ijin`.
  * Berkas diunggah terpisah ke `POST /importfile` (multipart) memakai
  * `id` izin yang baru dibuat — persis seperti aplikasi v89. Batas 5 MB
- * mengikuti limit route `/api/upload`.
+ * mengikuti limit 5 MB yang diberlakukan oleh transport native dan proxy.
  */
 const MAX_ATTACHMENT_BYTES = 5_000_000;
 type TabPerizinan = 'pengajuan' | 'riwayat';

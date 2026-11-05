@@ -478,7 +478,7 @@ cek('aturan lama sudah tidak dipakai',
 cek('tinggi daftar tidak lagi jadi penentu arah', !/scrollHeight/.test(kodeDd),
   'scrollHeight hanya memaksa daftar naik saat panjang');
 cek('tinggi maksimum tetap dihitung dari ruang tersedia',
-  /Math\.max\(TINGGI_MINIMUM, Math\.min\(TINGGI_DAFTAR_MAKS, ruang\)\)/.test(ddSrc),
+  /setTinggiMaks\(Math\.min\(TINGGI_DAFTAR_MAKS, ruang\)\)/.test(ddSrc),
   'tanpa ini daftar panjang keluar layar');
 cek('mengukur visualViewport', /window\.visualViewport/.test(ddSrc), 'innerHeight tidak menyusut saat keyboard muncul');
 cek('dihitung ulang saat resize', /addEventListener\('resize'/.test(ddSrc));

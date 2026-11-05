@@ -129,11 +129,8 @@ cek(
   /akunFirestore/.test(tanpaFirebaseSdk) && !/from 'firebase/.test(tanpaFirebaseSdk),
   'pembacaan lewat server = token diverifikasi, nama akun dari token'
 );
-cek(
-  'lib/firebase.ts tidak diimpor dari modul I/O klien',
-  !/from '\.\/firebase'/.test(tanpaFirebaseSdk),
-  'modul itu hanya perlu `db` + SDK, yang keduanya sudah tidak dipakai'
-);
+cek('modul konfigurasi Firebase client sudah dihapus',
+  !existsSync(join(root, 'src/lib/firebase.ts')));
 
 // ═════════════════════════════════════════════════════════════════════
 console.log('\n=== 2. Graf impor statis dari entry');

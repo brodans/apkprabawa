@@ -17,22 +17,25 @@ jobs:
       ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
       ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
       ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-      VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY || vars.VITE_FIREBASE_API_KEY || secrets.FIREBASE_API_KEY || vars.FIREBASE_API_KEY || 'AIzaSyDAX5IgGyDcIE1axUKOC2o-sN6DTxaU0y0' }}
-      VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN || vars.VITE_FIREBASE_AUTH_DOMAIN || secrets.FIREBASE_AUTH_DOMAIN || vars.FIREBASE_AUTH_DOMAIN || 'prabawa.firebaseapp.com' }}
-      VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID || vars.VITE_FIREBASE_PROJECT_ID || secrets.FIREBASE_PROJECT_ID || vars.FIREBASE_PROJECT_ID || 'prabawa' }}
-      VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET || vars.VITE_FIREBASE_STORAGE_BUCKET || secrets.FIREBASE_STORAGE_BUCKET || vars.FIREBASE_STORAGE_BUCKET || 'prabawa.firebasestorage.app' }}
-      VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID || vars.VITE_FIREBASE_MESSAGING_SENDER_ID || secrets.FIREBASE_MESSAGING_SENDER_ID || vars.FIREBASE_MESSAGING_SENDER_ID || '492946623936' }}
-      VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID || vars.VITE_FIREBASE_APP_ID || secrets.FIREBASE_APP_ID || vars.FIREBASE_APP_ID || '1:492946623936:web:0f14ff2f2c1db770228c25' }}
-      VITE_FIREBASE_MEASUREMENT_ID: ${{ secrets.VITE_FIREBASE_MEASUREMENT_ID || vars.VITE_FIREBASE_MEASUREMENT_ID || secrets.FIREBASE_MEASUREMENT_ID || vars.FIREBASE_MEASUREMENT_ID || 'G-24X04RK5LN' }}
-      VITE_APP_SECRET: ${{ secrets.VITE_APP_SECRET || vars.VITE_APP_SECRET || secrets.APP_SECRET || vars.APP_SECRET || 'prabawa_secret_2026_super_secure_key' }}
-      VITE_MIDTRANS_CLIENT_KEY: ${{ secrets.VITE_MIDTRANS_CLIENT_KEY || vars.VITE_MIDTRANS_CLIENT_KEY || secrets.MIDTRANS_CLIENT_KEY || vars.MIDTRANS_CLIENT_KEY || 'Mid-client-IULEtYavZ4WoulM6' }}
-      VITE_MIDTRANS_MERCHANT_ID: ${{ secrets.VITE_MIDTRANS_MERCHANT_ID || vars.VITE_MIDTRANS_MERCHANT_ID || secrets.MIDTRANS_MERCHANT_ID || vars.MIDTRANS_MERCHANT_ID || 'M405184004' }}
-      VITE_MIDTRANS_IS_PRODUCTION: ${{ secrets.VITE_MIDTRANS_IS_PRODUCTION || vars.VITE_MIDTRANS_IS_PRODUCTION || secrets.MIDTRANS_IS_PRODUCTION || vars.MIDTRANS_IS_PRODUCTION || 'false' }}
-      VITE_API_BASE_URL: ${{ secrets.VITE_API_BASE_URL || vars.VITE_API_BASE_URL || secrets.API_BASE_URL || vars.API_BASE_URL || 'https://prabawa.vercel.app' }}
-      MIDTRANS_SERVER_KEY: ${{ secrets.MIDTRANS_SERVER_KEY || vars.MIDTRANS_SERVER_KEY || '' }}
-      PANEL_SESSION_SECRET: ${{ secrets.PANEL_SESSION_SECRET || vars.PANEL_SESSION_SECRET || '' }}
-      PRESENSI_BASE_URL: ${{ secrets.PRESENSI_BASE_URL || vars.PRESENSI_BASE_URL || 'https://presensi.bkd.jatimprov.go.id/service' }}
+      VITE_MIDTRANS_CLIENT_KEY: ${{ secrets.VITE_MIDTRANS_CLIENT_KEY }}
+      VITE_MIDTRANS_IS_PRODUCTION: ${{ secrets.VITE_MIDTRANS_IS_PRODUCTION }}
+      VITE_API_BASE_URL: ${{ secrets.VITE_API_BASE_URL }}
     steps:
+      - name: Validate required GitHub secrets
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        shell: bash
+        run: |
+          missing=()
+          [[ -n "$ANDROID_KEYSTORE_BASE64" ]] || missing+=("ANDROID_KEYSTORE_BASE64")
+          [[ -n "$ANDROID_KEYSTORE_PASSWORD" ]] || missing+=("ANDROID_KEYSTORE_PASSWORD")
+          [[ -n "$ANDROID_KEY_ALIAS" ]] || missing+=("ANDROID_KEY_ALIAS")
+          [[ -n "$ANDROID_KEY_PASSWORD" ]] || missing+=("ANDROID_KEY_PASSWORD")
+          [[ -n "$VITE_API_BASE_URL" ]] || missing+=("VITE_API_BASE_URL")
+          if (( ${#missing[@]} > 0 )); then
+            echo "::error::Missing required GitHub Actions secrets: ${missing[*]}"
+            exit 1
+          fi
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
@@ -80,22 +83,6 @@ jobs:
           fi
           node -e "const fs = require('fs'); fs.writeFileSync('/tmp/prabawa-release.jks', Buffer.from(process.env.ANDROID_KEYSTORE_BASE64, 'base64'));"
           ls -l /tmp/prabawa-release.jks
-      - name: Generate .env for Vite build
-        run: |
-          cat << EOF > .env
-          VITE_FIREBASE_API_KEY=${VITE_FIREBASE_API_KEY}
-          VITE_FIREBASE_AUTH_DOMAIN=${VITE_FIREBASE_AUTH_DOMAIN}
-          VITE_FIREBASE_PROJECT_ID=${VITE_FIREBASE_PROJECT_ID}
-          VITE_FIREBASE_STORAGE_BUCKET=${VITE_FIREBASE_STORAGE_BUCKET}
-          VITE_FIREBASE_MESSAGING_SENDER_ID=${VITE_FIREBASE_MESSAGING_SENDER_ID}
-          VITE_FIREBASE_APP_ID=${VITE_FIREBASE_APP_ID}
-          VITE_FIREBASE_MEASUREMENT_ID=${VITE_FIREBASE_MEASUREMENT_ID}
-          VITE_APP_SECRET=${VITE_APP_SECRET}
-          VITE_MIDTRANS_CLIENT_KEY=${VITE_MIDTRANS_CLIENT_KEY}
-          VITE_MIDTRANS_MERCHANT_ID=${VITE_MIDTRANS_MERCHANT_ID}
-          VITE_MIDTRANS_IS_PRODUCTION=${VITE_MIDTRANS_IS_PRODUCTION}
-          VITE_API_BASE_URL=${VITE_API_BASE_URL}
-          EOF
       - name: Build Android APK
         run: npm run tauri:android:build
       - name: Upload Android APK

@@ -85,17 +85,6 @@ export const LABEL_HARI: Record<HariKerja, string> = {
   6: 'Sab',
 };
 
-/** Label panjang hari. */
-export const LABEL_HARI_PANJANG: Record<HariKerja, string> = {
-  0: 'Minggu',
-  1: 'Senin',
-  2: 'Selasa',
-  3: 'Rabu',
-  4: 'Kamis',
-  5: "Jum'at",
-  6: 'Sabtu',
-};
-
 /** Urutan hari dalam UI (Senin–Minggu untuk konvensi Indonesia). */
 export const URUTAN_HARI: HariKerja[] = [1, 2, 3, 4, 5, 6, 0];
 

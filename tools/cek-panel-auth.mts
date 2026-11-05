@@ -130,7 +130,7 @@ function seed() {
     imei: 'IMEI-BUDI',
     updatedAt: '2026-02-01T00:00:00.000Z',
   });
-  // Format lama (`v1`): tidak bisa dibuka server tanpa `VITE_APP_SECRET`.
+  // Format lama (`v1`): tidak bisa dibuka server tanpa `APP_SECRET`.
   dokumen.set(KUNCI.pengaturan('kredensial_server__siti'), {
     nip: '197001012000011001',
     passwordEncrypted: 'U2FsdGVkX1legacy',
@@ -506,7 +506,7 @@ console.log('\n=== 1e2. Admin dengan dokumen format lama (pinEncrypted)');
 const LEGACY_SECRET = 'secret-lama-yang-pernah-di-bundle';
 const SANDI_LEGACY = 'rahasia-admin-lama';
 
-process.env.VITE_APP_SECRET = LEGACY_SECRET;
+process.env.APP_SECRET = LEGACY_SECRET;
 const legacyCipher = CryptoJS.AES.encrypt(SANDI_LEGACY, LEGACY_SECRET).toString();
 cek('ciphertext uji benar-benar format OpenSSL Salted__',
   legacyCipher.startsWith('U2FsdGVkX1'),
@@ -546,13 +546,13 @@ dokumen.set(KUNCI.pengaturan('auth'), { ...authLama, pinEncrypted: 'bukan-cipher
 const legacyRusak = await P.masukPanel('admin', SANDI_LEGACY, { ip: 'uji-legacy' });
 cek('ciphertext rusak ditolak, tidak melempar', !legacyRusak.ok);
 
-// Tanpa `VITE_APP_SECRET` di server, jalur lama tidak boleh "cocok" buta.
+// Tanpa `APP_SECRET` di server, jalur lama tidak boleh "cocok" buta.
 P.resetPembatasPercobaan();
 dokumen.set(KUNCI.pengaturan('auth'), authLama);
-delete process.env.VITE_APP_SECRET;
+delete process.env.APP_SECRET;
 const legacyTanpaKunci = await P.masukPanel('admin', SANDI_LEGACY, { ip: 'uji-legacy' });
-cek('tanpa VITE_APP_SECRET, jalur lama selalu gagal', !legacyTanpaKunci.ok);
-process.env.VITE_APP_SECRET = LEGACY_SECRET;
+cek('tanpa APP_SECRET, jalur lama selalu gagal', !legacyTanpaKunci.ok);
+process.env.APP_SECRET = LEGACY_SECRET;
 
 // Kembalikan ke kondisi normal untuk bagian berikutnya.
 dokumen.set(KUNCI.pengaturan('auth'), { ...adminDoc });
@@ -1624,21 +1624,24 @@ cek('AppContext tidak mengekspor setTabPermissions',
 cek('setter-nya benar-benar hilang dari implementasinya',
   !/const setTabPermissions/.test(appCtx));
 /*
- * Lima titik penulisan `tabPermissions`, dan **semuanya** punya alasan:
+ * Enam titik penulisan `tabPermissions`, dan **semuanya** punya alasan:
  *
  * 1. nilai awal saat mount — `UNAUTHENTICATED_PERMISSIONS`, bukan apa pun
  *    dari storage;
  * 2. hasil verifikasi server (`izinServer`);
  * 3–4. reset ke kosong — logout, dan `setCurrentUser()` tanpa token;
- * 5. `setCurrentUser()` dengan akun hasil login server.
+ * 5. `setCurrentUser()` dengan akun hasil login server;
+ * 6. fallback cache saat offline, setelah dinormalisasi terhadap role tersimpan.
  *
  * Yang tidak boleh ada: penulisan dari nilai yang datang dari storage atau dari
  * argumen UI. Itu yang dicek di sini — jumlahnya harus **tepat** lima, supaya
  * setter yang ditambahkan diam-diam akan terlihat.
  */
 const titikTulis = appCtx.match(/setTabPermissionsState\(/g) ?? [];
-cek('tabPermissions ditulis tepat 5 kali, semua dari server', titikTulis.length === 5,
+cek('tabPermissions ditulis tepat 6 kali, setiap jalur terjaga', titikTulis.length === 6,
   `${titikTulis.length} titik tulis — kalau bertambah, cek dari mana nilainya datang`);
+cek('izin cache hanya dipakai saat offline dan dinormalisasi',
+  /if \(isOffline\) \{[\s\S]{0,400}?batasiIzin\(sesiTersimpan\.tabPermissions, sesiTersimpan\.boundRole\)[\s\S]{0,200}?setTabPermissionsState\(izinLokal\)/.test(appCtx));
 cek('nilai awalnya UNAUTHENTICATED_PERMISSIONS',
   /useState<TabPermissions>\(UNAUTHENTICATED_PERMISSIONS\)/.test(appCtx),
   'role/izin dari storage TIDAK boleh dipasang sebelum server mengonfirmasi');
@@ -1729,7 +1732,7 @@ cek('autoLoginPusat ada di server', /export async function autoLoginPusat/.test(
 cek('server yang mendekripsi kredensial', /dekripsi\(String\(data\.passwordEncrypted/.test(panelSrc));
 cek('kredensial dienkripsi dengan kunci turunan server',
   /createCipheriv\('aes-256-gcm',\s*kunciKredensial\(\)/.test(panelSrc),
-  'AES dengan VITE_APP_SECRET bukan rahasia — kuncinya ada di bundle');
+  'AES-256-GCM memakai secret server-only, bukan secret yang dibundel');
 
 const autoSrc = kode('src/lib/serverAutoLogin.ts');
 cek('auto-login tidak mendekripsi password di peramban', !/decryptAppCredential/.test(autoSrc));
@@ -1751,14 +1754,14 @@ cek('Web mengisi NIP/password tersimpan dan tetap memberi ruang edit',
  *
  * Modul itu hanya menyisakan pembaca v1 + validator v2, dan keduanya pun
  * tidak punya pemanggil: server punya `verifikasiLegacyPin()` sendiri, dan
- * ciphertext `v2` tidak pernah dikirim ke peramban. Kuncinya ada di
- * `VITE_APP_SECRET` yang Vite suntikkan ke bundle — jadi modul seperti itu
- * tidak boleh ada di sisi klien sama sekali. Yang menggantikannya:
+ * ciphertext `v2` tidak pernah dikirim ke peramban. Secret migrasi `APP_SECRET`
+ * hanya berada di server; modul pembaca legacy tidak perlu berada di klien.
+ * Yang menggantikannya:
  * `lib/pin.ts` (bcrypt, server) + `lib/panelServer.ts` (AES-256-GCM).
  */
 cek('tidak ada modul encryption.ts di sisi klien',
   !existsSync(join(root, 'src/lib/encryption.ts')),
-  'kuncinya ada di bundle peramban');
+  'secret migrasi hanya tersedia di server');
 
 // ═════════════════════════════════════════════════════════════════════
 console.log('\n=== 10. Bentuk kode yang mencegah regresi');

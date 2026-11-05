@@ -88,7 +88,7 @@ import { midtransProduksi } from './midtransEnv';
 
 export { adminTersedia };
 
-/** Koleksi & dokumen  sama dengan `lib/firebase.ts` tapi di sisi server. */
+/** Nama koleksi & dokumen billing di Firestore Admin. */
 const COLL_PENGATURAN = 'jatim_pengaturan';
 const COLL_LANGGANAN = 'jatim_langganan';
 const COLL_TAGIHAN = 'jatim_tagihan';

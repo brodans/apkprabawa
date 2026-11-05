@@ -16,7 +16,7 @@ import { Modal } from './ui/Modal';
 import { Field, Input, ActionButton } from './ui/Surface';
 import Dropdown from './ui/Dropdown';
 import type { PresetOtomatisasi, TipePreset, HariKerja } from '../lib/presetOtomatisasi';
-import { LABEL_HARI, URUTAN_HARI } from '../lib/presetOtomatisasi';
+import { LABEL_HARI, MAX_LOKASI_POOL, URUTAN_HARI } from '../lib/presetOtomatisasi';
 import type { TitikAbsen } from '../lib/lokasiTersimpan';
 import type { WorkCodeView } from '../lib/viewModels';
 
@@ -74,8 +74,6 @@ const TIPE_OPTIONS: { tipe: TipePreset; label: string }[] = [
   { tipe: 'pulang', label: 'Pulang' },
   { tipe: 'custom', label: 'Absen Siang' },
 ];
-
-const MAKS_LOKASI = 20;
 
 // ═══════════════════════════════════════════════════════════════════════
 //  Komponen
@@ -139,7 +137,7 @@ export default function PresetFormModal({
       if (sudahAda) {
         return { ...prev, lokasiIds: prev.lokasiIds.filter(l => l !== id) };
       }
-      if (prev.lokasiIds.length >= MAKS_LOKASI) return prev; // batas maks
+      if (prev.lokasiIds.length >= MAX_LOKASI_POOL) return prev;
       return { ...prev, lokasiIds: [...prev.lokasiIds, id] };
     });
   };
@@ -311,7 +309,7 @@ export default function PresetFormModal({
         {/* ── Pool Lokasi ── */}
         <Field
           label="Pool Lokasi"
-          hint={`${form.lokasiIds.length} dipilih / maks ${MAKS_LOKASI}`}
+          hint={`${form.lokasiIds.length} dipilih / maks ${MAX_LOKASI_POOL}`}
           required
         >
           {/* Search lokasi */}
@@ -353,7 +351,7 @@ export default function PresetFormModal({
               lokasiFiltrat.map(lokasi => {
                 const dipilih = form.lokasiIds.includes(lokasi.id);
                 const dinonaktifkan =
-                  !dipilih && form.lokasiIds.length >= MAKS_LOKASI;
+                  !dipilih && form.lokasiIds.length >= MAX_LOKASI_POOL;
                 return (
                   <button
                     key={lokasi.id}

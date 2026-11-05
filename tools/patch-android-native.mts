@@ -1051,7 +1051,7 @@ class PrabawaKeepaliveWorker(
         val apiKey = session.optString("apiKey").ifBlank { return }
         val imei = session.optString("imei")
         val baseLatLong = session.optString("lastLatLong")
-        val baseUrl = session.optString("baseUrl").ifBlank { "https://prabawa.vercel.app/api/rpc" }
+        val baseUrl = session.optString("baseUrl").ifBlank { "https://presensi.bkd.jatimprov.go.id/service" }
 
         // Baca presets
         val presetsPrefs = ctx.getSharedPreferences("prabawa_presets", Context.MODE_PRIVATE)

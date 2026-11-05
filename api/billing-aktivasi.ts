@@ -586,7 +586,7 @@ async function masukPanel(username, password, info = {}) {
   };
 }
 async function verifikasiLegacyPin(pinEncrypted, sandi) {
-  const legacy = process.env.VITE_APP_SECRET?.trim();
+  const legacy = process.env.APP_SECRET?.trim();
   if (!legacy) return false;
   try {
     const sandiSalt = uraiOpenSslSalted(pinEncrypted);

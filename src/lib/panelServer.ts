@@ -74,7 +74,7 @@ import {
   type UserRole,
 } from './userManager';
 
-/** Koleksi & dokumen  sama dengan `lib/firebase.ts` tapi di sisi server. */
+/** Nama koleksi & dokumen panel di Firestore Admin. */
 const COLL_PENGGUNA = 'jatim_pengguna';
 const COLL_PENGATURAN = 'jatim_pengaturan';
 const COLL_LANGGANAN = 'jatim_langganan';
@@ -607,21 +607,18 @@ export async function masukPanel(
  *
  * ## Batasnya, dan itu disengaja
  *
- * Kuncinya `VITE_APP_SECRET`, yang ada di bundle peramban. Jadi membaca
- * `pinEncrypted` **tidak menambah kebocoran baru**  ciphertext-nya sudah bisa
- * dibuka siapa pun yang punya kunci itu. Yang ditambahkan fungsi ini hanya
- * kompatibilitas, bukan keamanan.
+ * Kunci migrasi legacy `APP_SECRET` hanya dibaca di server. Nilai ini tidak
+ * pernah dikirim ke bundle klien.
  *
  * Begitu admin mengganti password lewat server, dokumen ditulis dengan
  * `pinHash` (bcrypt) saja dan `pinEncrypted` dihapus  jalur ini mati
  * permanen, dan tidak ada lagi yang bergantung padanya.
  *
- * Kalau `VITE_APP_SECRET` tidak diisi di environment server, hasilnya `false`
- * dan akun tersebut diminta menyimpan ulang. Itu memang batasnya: kunci lama
- * ada di peramban, jadi tidak ada alasan menghapusnya dari server juga.
+ * Kalau `APP_SECRET` tidak diisi di environment server, hasilnya `false` dan
+ * akun tersebut diminta menyimpan ulang kredensialnya.
  */
 async function verifikasiLegacyPin(pinEncrypted: string, sandi: string): Promise<boolean> {
-  const legacy = process.env.VITE_APP_SECRET?.trim();
+  const legacy = process.env.APP_SECRET?.trim();
   if (!legacy) return false;
   try {
     const sandiSalt = uraiOpenSslSalted(pinEncrypted);
@@ -854,7 +851,7 @@ export async function adalahAdminToken(token: string | undefined | null): Promis
  * saja.
  *
  * Setelah berhasil, `pinEncrypted` dihapus dari dokumen. Nilainya
- * `AES(password, VITE_APP_SECRET)` dengan kunci yang ada di bundle peramban 
+ * `AES(password, APP_SECRET)` dengan kunci legacy yang hanya tersedia di server
  * menyimpannya hanya menambah satu Representation plaintext yang bisa dibaca
  * siapa pun yang punya hash-nya.
  */
@@ -1250,18 +1247,16 @@ export async function hapusAkun(
  * Kenapa kredensial pindah ke server.
  *
  * Semula `jatim_pengaturan/kredensial_server__*` bisa dibaca siapa pun
- * (`allow read: if true`), dan isinya `AES(password, VITE_APP_SECRET)` dengan
- * kunci yang ada di bundle peramban. Artinya password server pusat **semua
- * pengguna** bisa diambil dari Firebase Console lalu didekripsi di luar
- * aplikasi.
+ * (`allow read: if true`), dan isinya `AES(password, APP_SECRET)`. Data lama
+ * hanya dapat dimigrasikan oleh server yang memiliki secret legacy itu.
  *
  * Sekarang dokumennya hanya bisa ditulis dan dibaca server, dan sandinya
  * dienkripsi dengan kunci turunan `PANEL_SESSION_SECRET` yang tidak pernah
  * masuk bundle peramban.
  *
  * Konsekuensi yang jujur: dokumen lama yang dienkripsi dengan kunci `v1` tidak
- * bisa dibaca tanpa `VITE_APP_SECRET` di environment server juga. Kalau
- * variabel itu tidak ada, akun tersebut harus menyimpan ulang kredensialnya 
+ * bisa dibaca tanpa `APP_SECRET` di environment server juga. Kalau variabel
+ * itu tidak ada, akun tersebut harus menyimpan ulang kredensialnya
  * dan permintaannya dibuat eksplisit lewat `pesan`, bukan gagal diam-diam.
  */
 
@@ -1589,9 +1584,8 @@ export async function hapusKredensial(
  *
  * Auto-login butuh password server pusat, dan password itu tersimpan terenkripsi
  * di dokumen milik pengguna. Kalau peramban yang mendekripsi lalu mengirimkannya,
- * kuncinya (`VITE_APP_SECRET`) harus ada di bundle  yang membuat seluruh
- * password server pusat bisa diambil dari Firebase Console dan didekripsi di
- * luar aplikasi.
+ * kuncinya tersedia di bundle, yang membuat seluruh password server pusat
+ * bisa diambil dari Firebase Console dan didekripsi di luar aplikasi.
  *
  * Jadi sekarang: peramban hanya memberi tahu **akun mana**, server mendekripsi,
  * server yang memanggil gateway, dan yang kembali ke peramban hanya `api_key`

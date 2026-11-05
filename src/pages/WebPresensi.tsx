@@ -36,6 +36,7 @@ import {
   login,
   logout,
   muatCaptcha,
+  muatFotoPegawai,
   urlBerkas,
   type BarisIjin,
   type BarisKehadiran,
@@ -412,6 +413,45 @@ function ViewerBerkas({ berkas, onTutup }: { berkas: BerkasState; onTutup: () =>
         </a>
       </div>
     </Modal>
+  );
+}
+
+function FotoPegawaiWeb({ path }: { path: string }) {
+  const [src, setSrc] = useState<string | null>(null);
+
+  useEffect(() => {
+    let aktif = true;
+    let url: string | null = null;
+    void muatFotoPegawai(path).then(
+      (hasil) => {
+        if (aktif) {
+          url = hasil;
+          setSrc(hasil);
+        } else {
+          URL.revokeObjectURL(hasil);
+        }
+      },
+      (error: unknown) => {
+        console.warn('Foto pegawai Web Presensi gagal dimuat.', error);
+      },
+    );
+    return () => {
+      aktif = false;
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [path]);
+
+  if (!src) return null;
+  return (
+    <img
+      src={src}
+      alt="Foto pegawai"
+      className="w-24 h-24 rounded-2xl object-cover border border-slate-200 dark:border-slate-700 shrink-0"
+      onError={(event) => {
+        URL.revokeObjectURL(src);
+        event.currentTarget.style.display = 'none';
+      }}
+    />
   );
 }
 
@@ -1290,10 +1330,7 @@ export default function WebPresensi() {
                 <>
                   <div className="flex gap-5">
                     {detail.foto && (
-                      <img src={detail.foto.startsWith('/ep') ? detail.foto : `/ep${detail.foto}`}
-                        alt="Foto pegawai"
-                        className="w-24 h-24 rounded-2xl object-cover border border-slate-200 dark:border-slate-700 shrink-0"
-                        onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+                      <FotoPegawaiWeb path={detail.foto} />
                     )}
                     <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
                       {Object.entries(detail.profil).map(([k, v]) => (

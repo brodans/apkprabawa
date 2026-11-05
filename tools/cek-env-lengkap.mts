@@ -51,7 +51,7 @@ function walkSrc(dir: string = join(root, 'src'), out: string[] = []): string[] 
  *
  * ⚠️ Polanya harus menerima `import.meta.env?.X` **dan** `process.env.X`.
  * Bentuk `?.` dipakai hampir semua env Vite di proyek ini
- * (`import.meta.env?.VITE_FIREBASE_API_KEY`), dan pola yang hanya
+ * (`import.meta.env?.VITE_API_BASE_URL`), dan pola yang hanya
  * mencari titik akan melewatkannya — yang membuat variabel yang benar-benar
  * tak terpakai ikut lolos, dan orang lalu menghapus env yang sebenarnya
  * masih dibaca.
@@ -154,34 +154,34 @@ for (const nama of [...terdaftar].sort()) {
 
 console.log('\n=== 3. Tidak ada VITE_ yang membocorkan rahasia ke peramban');
 
-/**
- * Satu-satunya `VITE_*` yang namanya mencurigakan tapi memang tidak
- * bisa dipindah ke server.
- *
- * `VITE_APP_SECRET` mengenkripsi password server pusat sebelum disimpan ke
- * dokumen Firestore **milik pengguna itu sendiri**, supaya tidak terbaca
- * polos di Firebase Console. Enkripsi harusnya terjadi sebelum data
- * meninggalkan peramban — kalau dipindah ke server, kuncinya jadi milik
- * server dan bobotnya hilang: siapa pun yang bisa memakai endpoint itu
- * sudah bisa membaca password apa pun yang tersimpan.
- *
- * Yang dilindungi: skrip lain di origin yang sama membacanya, bukan
- * mencegah pengguna sendiri melihat passwordnya sendiri — itu memang
- * tidak bisa dihindari di desain seperti ini.
- */
-const VITE_YANG_WAJIB_PUBLIK = new Set(['VITE_APP_SECRET']);
-
 for (const nama of terdaftar) {
   if (!nama.startsWith('VITE_')) continue;
   const mencurigakan = /SECRET|PRIVATE|SERVER_KEY|SERVICE_ACCOUNT|PASSWORD|TOKEN/i.test(nama);
   cek(
     `${nama} aman untuk peramban`,
-    !mencurigakan || VITE_YANG_WAJIB_PUBLIK.has(nama),
-    VITE_YANG_WAJIB_PUBLIK.has(nama)
-      ? 'wajib ada di peramban — kuncinya mengenkripsi data milik pengguna sendiri sebelum dikirim'
-      : 'Vite menyuntik seluruh VITE_* ke JavaScript — berawalan VITE_ berarti ada di bundle'
+    !mencurigakan,
+    'Vite menyuntik seluruh VITE_* ke JavaScript; secret hanya boleh berada di server'
   );
 }
+
+const androidWorkflow = readFileSync(join(root, '.github/workflows/tauri-android.yml'), 'utf8');
+cek('workflow Android hanya membaca GitHub secrets tanpa vars/fallback',
+  !/\bvars\./.test(androidWorkflow) && !/\$\{\{[^}]*\|\|[^}]*\}\}/.test(androidWorkflow));
+for (const nama of ['VITE_API_BASE_URL', 'VITE_MIDTRANS_CLIENT_KEY', 'VITE_MIDTRANS_IS_PRODUCTION']) {
+  cek(`${nama} berasal dari GitHub secret`,
+    new RegExp(`${nama}:\\s*\\$\\{\\{\\s*secrets\\.${nama}\\s*\\}\\}`).test(androidWorkflow));
+}
+const kodeDanWorkflow = walkSrc()
+  .map(f => readFileSync(f, 'utf8'))
+  .join('\n') + androidWorkflow;
+cek('tidak ada credential default hardcoded yang dikenal',
+  !/AIzaSyDAX5IgGyDcIE1axUKOC2o-sN6DTxaU0y0|Mid-client-IULEtYavZ4WoulM6|prabawa_secret_2026_super_secure_key/.test(
+    kodeDanWorkflow
+  ));
+cek('secret server tidak pernah masuk workflow build APK',
+  !/\b(?:MIDTRANS_SERVER_KEY|PANEL_SESSION_SECRET|FIREBASE_SERVICE_ACCOUNT|APP_SECRET)\b/.test(
+    androidWorkflow
+  ));
 
 // ═════════════════════════════════════════════════════════════════════
 console.log('\n=== 4. .env.example menjelaskan cara menutupi kegagalan yang pernah terjadi');

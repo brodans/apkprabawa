@@ -19,9 +19,7 @@
  *
  * Tapi aplikasi ini tidak memakai Firebase Authentication  setiap permintaan
  * dari peramban datang sebagai anonim, jadi `request.auth` selalu `null` dan
- * `if true` berarti **seluruh koleksi terbuka untuk siapa pun**. API key-nya
- * ada di `VITE_FIREBASE_API_KEY`, yang Vite suntikkan ke bundle, jadi bisa
- * diambil dari DevTools lalu dipakai lewat REST API tanpa membuka aplikasi:
+ * `if true` berarti **seluruh koleksi terbuka untuk siapa pun**.
  *
  * ```
  * GET https://firestore.googleapis.com/v1/projects/<id>/databases/(default)/documents/jatim_tagihan
@@ -54,13 +52,9 @@
  * tidak berubah, dan hasilnya benar untuk pemanggil yang sedang login (satu
  * akun aktif per tab, ditegakkan `saveSession()`).
  *
- * ## Kenapa `isFirebaseReady()` masih dipakai
- *
- * Bukan untuk membaca Firestore  Gerbang Langganan memakainya untuk
- * memutuskan apakah layanan langganan bisa diverifikasi sama sekali. Tanpa
- * Firestore di sisi server, status langganan tidak ada sumber kebenaran, dan
- * tanpa itu **semua** akun terbaca "belum bayar" dan tidak ada yang bisa
- * membayar. Keadaan itu harus terlihat, bukan diperlakukan sebagai "lolos".
+ * Kegagalan jaringan diteruskan ke pemanggil, bukan diubah menjadi data
+ * kosong. Gerbang langganan hanya boleh dibuka setelah server mengonfirmasi
+ * status akun.
  */
 import {
   BILLING_DEFAULT,
@@ -149,18 +143,12 @@ export async function loadPengaturanBilling(): Promise<PengaturanBilling> {
  * dibiarkan supaya pemanggilnya tidak berubah, dan `saveSession()` menjamin
  * hanya ada satu akun aktif per tab.
  *
- * `null` berarti belum pernah membayar (dokumennya tidak ada) **atau** server
- * tidak bisa dihubungi. keduanya menghasilkan tampilan yang sama dari sisi
- * gerbang, dan itu tidak berubah dari perilaku sebelumnya.
+ * `null` berarti akun belum pernah membayar. Kegagalan jaringan dilempar
+ * sebagai galat agar gerbang tidak keliru meloloskan pengguna.
  */
-export async function loadLangganan(
-  username: string,
-  teruskanGalatJaringan = false
-): Promise<DokumenLangganan | null> {
+export async function loadLangganan(username: string): Promise<DokumenLangganan | null> {
   void username;
-  const hasil = teruskanGalatJaringan
-    ? await panelBatal<{ dokumen?: DokumenLangganan }>('langganan:saya')
-    : await minta<{ dokumen?: DokumenLangganan }>('langganan:saya');
+  const hasil = await panelBatal<{ dokumen?: DokumenLangganan }>('langganan:saya');
   return hasil?.dokumen ?? null;
 }
 

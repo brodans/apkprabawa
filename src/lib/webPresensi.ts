@@ -1,33 +1,76 @@
 /**
  * Modul komunikasi dengan e-Presensi BKD Jatim.
  *
- * Semua path /ep/* diproxy ke https://presensi.bkd.jatimprov.go.id
- * - Local dev: lewat proxy dev-server Vite (vite.config.ts)
- * - Vercel: lewat serverless function api/ep.ts
+ * Browser meneruskan path /ep/* melalui proxy API ke server e-Presensi.
+ * APK Tauri mengirim request melalui HTTP native dengan sesi cookie sendiri.
  *
  * Captcha:
  * - Local dev: dipecahkan otomatis via OCR lokal (ocr_service.py, ddddocr)
- * - Vercel/production: diketik manual  OCR tidak di-deploy, bukan karena tidak
- *   bisa jalan, tapi karena modelnya 844 MB dan storage Function tidak sanggup
- *   menanggungnya. Lihat `OCR_LOKAL` di `WebPresensi.tsx`.
+ * - APK Tauri: request langsung ke server e-Presensi, tidak melalui Vercel.
  */
 
 import { apiUrl } from './apiBase';
+import { invoke } from '@tauri-apps/api/core';
 
-// APK harus menuju proxy production, bukan tauri://localhost/ep.
-// Browser tetap memakai path relatif saat VITE_API_BASE_URL tidak diisi.
-const PROXY = `${apiUrl('/ep').replace(/\/$/, '')}`;
+function berjalanDiTauri(): boolean {
+  return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+}
+
+// Browser memakai API proxy; APK meneruskan path ini ke HTTP native Tauri.
+const PROXY = berjalanDiTauri() ? '/ep' : `${apiUrl('/ep').replace(/\/$/, '')}`;
 const PROXY_FALLBACK = 'https://prabawa.vercel.app/ep';
 
-const PESAN_JARINGAN =
-  'Tidak bisa menjangkau server e-Presensi lewat proxy /ep. ' +
-  'Pastikan aplikasi dijalankan dengan "npm run dev" atau gunakan Vercel deployment.';
+interface NativeWebResponse {
+  status: number;
+  contentType: string;
+  body?: string | null;
+  bodyBase64?: string | null;
+}
 
-/** fetch dengan credentials include dan pesan error yang jelas. */
+const PESAN_JARINGAN =
+  'Tidak bisa menjangkau server e-Presensi. Periksa koneksi internet Anda.';
+
+/** Gunakan sesi native Tauri pada APK dan cookie browser pada web. */
 async function req(url: string, opts: RequestInit = {}): Promise<Response> {
   try {
+    if (berjalanDiTauri()) {
+      const target = new URL(url, window.location.origin);
+      const headers = new Headers(opts.headers);
+      let body: string | undefined;
+      if (typeof opts.body === 'string') {
+        body = opts.body;
+      } else if (opts.body instanceof URLSearchParams) {
+        body = opts.body.toString();
+      } else if (opts.body != null) {
+        throw new Error('Format request Web Presensi tidak didukung di APK.');
+      }
+      const result = await invoke<NativeWebResponse>('web_presensi_request', {
+        path: `${target.pathname}${target.search}`,
+        method: opts.method || 'GET',
+        body,
+        contentType: headers.get('content-type'),
+      });
+      const responseHeaders = new Headers();
+      if (result.contentType) responseHeaders.set('content-type', result.contentType);
+      let responseBody: BodyInit | null = result.body ?? null;
+      if (result.bodyBase64) {
+        const binary = atob(result.bodyBase64);
+        const bytes = new Uint8Array(binary.length);
+        for (let index = 0; index < binary.length; index++) {
+          bytes[index] = binary.charCodeAt(index);
+        }
+        responseBody = bytes;
+      }
+      if ([204, 205, 304].includes(result.status)) responseBody = null;
+      return new Response(responseBody, {
+        status: result.status,
+        headers: responseHeaders,
+      });
+    }
     return await fetch(url, { credentials: 'include', ...opts });
   } catch (e) {
+    if (e instanceof Error && e.message.startsWith('Format request')) throw e;
+    if (berjalanDiTauri() && typeof e === 'string') throw new Error(e);
     const err = new Error(PESAN_JARINGAN);
     (err as Error & { sebab: unknown }).sebab = e;
     throw err;
@@ -161,7 +204,7 @@ export async function muatCaptcha(): Promise<CaptchaResult> {
     if (!blob.type.includes('image')) throw new Error('respons bukan gambar');
     return { url: URL.createObjectURL(blob) };
   } catch (error) {
-    if (base === PROXY_FALLBACK) throw error;
+    if (berjalanDiTauri() || base === PROXY_FALLBACK) throw error;
     base = PROXY_FALLBACK;
   }
   await req(`${base}/p/`);
@@ -214,7 +257,7 @@ export async function login({ nip, password, captcha }: { nip: string; password:
 /** Logout untuk mengakhiri session. */
 export async function logout(): Promise<void> {
   try {
-    await fetch(`${PROXY}/p/default/logout`, { credentials: 'include' });
+    await req(`${PROXY}/p/default/logout`);
   } catch {
     /* biarkan: sesi akan hangat sendiri */
   }
@@ -588,4 +631,13 @@ export async function ambilBerkas(path: string): Promise<HasilBerkas> {
   const tipe = res.headers.get('content-type') || '';
   const blob = await res.blob();
   return { blob, tipe, url: URL.createObjectURL(blob) };
+}
+
+/** Muat foto pegawai memakai cookie sesi native pada APK. */
+export async function muatFotoPegawai(path: string): Promise<string> {
+  const url = urlBerkas(path);
+  if (!url) throw new Error('Path foto pegawai tidak valid.');
+  const response = await req(url);
+  if (!response.ok) throw new Error(`Gagal memuat foto pegawai (HTTP ${response.status}).`);
+  return URL.createObjectURL(await response.blob());
 }

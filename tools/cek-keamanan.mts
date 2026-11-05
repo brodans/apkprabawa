@@ -360,9 +360,7 @@ cek('rules pakai versi 2', /rules_version = '2'/.test(rulesMentah));
  * masa aktif". Tapi aplikasi ini tidak memakai Firebase Authentication, jadi
  * `request.auth` selalu `null` dan `if true` berarti **seluruh koleksi terbuka**.
  *
- * API key-nya bukan rahasia — ada di `VITE_FIREBASE_API_KEY`, yang Vite
- * suntikkan ke bundle. Setelah diambil dari DevTools, satu request REST
- * mengembalikan seluruh isi koleksi tanpa membuka aplikasi sama sekali.
+ * Tidak ada Firebase client key yang dibutuhkan atau dibundel.
  *
  * Yang bocor: `nip`, `masaAkhir`, `gratis` (siapa yang tidak membayar), dan di
  * `jatim_tagihan` juga `usernameLabel`, `nominal`, serta `buktiUrl`.
@@ -729,16 +727,7 @@ console.log('\n=== 9. Bundel server tidak boleh memuat kode khusus peramban');
 /*
  * `serverBilling.ts` memanggil `tambahDurasi()` dan `normalisasiDaftarPaket()`.
  * Semula fungsi itu tinggal di `langganan.ts`, yang mengimpor SDK Firebase
- * klien — jadi mengimpornya dari sisi server menarik `src/lib/firebase.ts`
- * ke dalam bundel CJS.
- *
- * Modul itu membaca konfigurasinya dari `import.meta.env`, yang kosong di
- * bundel CJS. Hasilnya semua kunci dianggap hilang dan modul mencetak
- *
- *     [firebase] Konfigurasi belum lengkap (...). Mode demo aktif.
- *
- * di layar Admin **setiap kali server dinyalakan** — padahal server memakai
- * Admin SDK dan tidak butuh konfigurasi klien sama sekali.
+ * klien. Modul klien tersebut telah dihapus; server hanya memakai Admin SDK.
  *
  * Pemeriksa ini tidak hanya melihat string di dalam bundel: dia menjalankan
  * esbuild dengan metafile, lalu memeriksa modul peramban mana saja yang
@@ -764,11 +753,8 @@ try {
 } catch (err) {
   cek('esbuild bisa membundel server.ts', false, String((err as Error)?.message ?? err).slice(0, 120));
 }
-cek(
-  'src/lib/firebase.ts tidak ikut ter-bundle di server',
-  !ikutBundel.some(f => f.endsWith('lib/firebase.ts')),
-  ikutBundel.filter(f => f.endsWith('lib/firebase.ts')).join(', ')
-);
+cek('modul Firebase client telah dihapus',
+  !existsSync(join(root, 'src/lib/firebase.ts')));
 cek(
   'src/lib/langganan.ts tidak ikut ter-bundle di server',
   !ikutBundel.some(f => f.endsWith('lib/langganan.ts')),
@@ -807,7 +793,6 @@ for (const f of WAJIB_SERVER) {
  * dan harus tetap di luar bundel CJS, tempat kutipan itu tidak ada.
  */
 const PERAMBAN = [
-  'lib/firebase.ts',
   'lib/cryptoJS.ts',
   'lib/akunFirestore.ts',
   'lib/sessionManager.ts',

@@ -373,7 +373,7 @@ export async function deleteUserAccount(username: string): Promise<void> {
 /**
  * Simpan kredensial server pusat.
  *
- * Password **tidak lagi** dienkripsi di peramban dengan `VITE_APP_SECRET`.
+ * Password **tidak lagi** dienkripsi di peramban dengan secret yang dibundel.
  * Kuncinya ada di bundle, jadi enkripsi itu hanya obfuscation; sekarang
  * server mengenkripsi dengan kunci turunan `PANEL_SESSION_SECRET` yang tidak
  * pernah masuk bundle.
@@ -393,7 +393,7 @@ export async function saveServerCredential(
  *  Password server pusat **tidak pernah ada di peramban**.
  *
  * Versi lama membaca `kredensial_server__{username}` dari Firestore lalu
- * mendekripsi `AES(password, VITE_APP_SECRET)` di browser  dengan kunci yang
+ * mendekripsi kredensial legacy di browser dengan kunci yang
  * ada di bundle, jadi seluruh password server pusat bisa diambil dari Firebase
  * Console. Sekarang server yang mendekripsi dan memanggil gateway; yang kembali
  * ke sini hanya `api_key` dan profil.

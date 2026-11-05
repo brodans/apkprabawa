@@ -12,7 +12,6 @@ import { useServerContext } from './useServerContext';
 import { bacaSemuaPreset, type PresetOtomatisasi } from '../lib/presetOtomatisasi';
 import { bacaTitik } from '../lib/lokasiTersimpan';
 import { idPerangkat } from '../lib/idPerangkat';
-import { apiUrl } from '../lib/apiBase';
 import {
   syncSessionToAndroid,
   syncPresetsToAndroid,
@@ -43,7 +42,7 @@ export function useAndroidPresetSync(): void {
           apiKey: pegawai?.apiKey ?? '',
           imei: config.imei || pegawai?.imei || idPerangkat(username),
           lastLatLong: context.lastLatLong ?? '',
-          baseUrl: apiUrl('/api/rpc'),
+          baseUrl: 'https://presensi.bkd.jatimprov.go.id/service',
         };
         syncSessionToAndroid(session);
 

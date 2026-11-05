@@ -114,7 +114,7 @@ console.log('\n=== 7. Kriptografi sisi klien — tidak boleh ada sama sekali');
  * 1. `encryptPayload` / `decryptPayload` (format `ENC$…$SEC`) +
  *    `PAYLOAD_ENCRYPTION_KEY` — tidak pernah dipanggil, kuncinya tidak pernah
  *    diisi. Codec yang tidak pernah dieksekusi tidak pernah diuji.
- * 2. `encryptAppCredential` — `CryptoJS.AES.encrypt(plain, VITE_APP_SECRET)`.
+ * 2. `encryptAppCredential` — enkripsi legacy memakai `APP_SECRET` server-side.
  *    Kuncinya ada di `import.meta.env`, yang Vite suntikkan ke bundle
  *    peramban, jadi ciphertext-nya bisa dibuka siapa pun yang punya
  *    ciphertext-nya.

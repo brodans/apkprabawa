@@ -1,15 +1,14 @@
 /**
  * Client API untuk PRABAWA (Portal Presensi Jawa Timur).
  *
- * Semua panggilan frontend TIDAK pernah menyentuh host pusat secara
- * langsung — semuanya lewat /api/rpc (Vercel serverless) atau
- * route yang sama di Express dev server. Tujuannya:
- *   1. Menutupi CORS di sisi browser.
- *   2. Menyembunyikan host pusat + TechMark (androidId) dari client.
- *   3. Menormalkan envelope JSON-RPC.
+ * Browser memakai `/api/rpc` (Vercel serverless atau Express dev server).
+ * APK Tauri mengirim JSON-RPC dari Rust langsung ke gateway pusat, sehingga
+ * alur presensi APK tidak bergantung pada deployment proxy maupun CORS WebView.
+ * Kedua jalur memakai envelope dan bentuk respons yang sama.
  */
 
 import { apiUrl } from '../lib/apiBase';
+import { invoke } from '@tauri-apps/api/core';
 
 import {
   type BaseRpcParam,
@@ -79,6 +78,15 @@ export class RpcError extends Error {
  */
 const TUNDA_ULANG_MS = 900;
 
+function berjalanDiTauri(): boolean {
+  return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+}
+
+interface NativeHttpResponse {
+  status: number;
+  body: string;
+}
+
 /** Tunggu sebentar, atau batalkan lebih dulu kalau pemanggil sudah menyerah. */
 function tungguUlangan(signal: AbortSignal | undefined, ms: number): Promise<void> {
   return new Promise(resolve => {
@@ -94,11 +102,12 @@ function tungguUlangan(signal: AbortSignal | undefined, ms: number): Promise<voi
 }
 
 /**
- * Kirim satu panggilan JSON-RPC ke gateway pusat lewat proxy.
+ * Kirim satu panggilan JSON-RPC ke gateway pusat. APK Tauri memakai HTTP
+ * native Rust langsung; browser/web memakai proxy API seperti sebelumnya.
  *
  * ## Percobaan ulang untuk objek yang hanya membaca
  *
- * Proxy membalas `503` kalau server pusat mengembalikan `5xx` atau badan
+ * Transport membalas `503` kalau server pusat mengembalikan `5xx` atau badan
  * kosong — keadaan yang terverifikasi terjadi sesaat di sisi server pusat
  * (`getlokasiabsen` sesekali membalas `HTTP 500` dengan badan nol byte).
  * Semula keadaan itu langsung tampil sebagai halaman galat, padahal
@@ -110,7 +119,7 @@ function tungguUlangan(signal: AbortSignal | undefined, ms: number): Promise<voi
  * kegagalan sesaat tidak berubah jadi catatan ganda.
  *
  * @param object nama RPC, cth. 'getworkcode', 'cekabsen', 'add_ijin'
- * @param param  payload; api_key / last_latlong / imei disuntik di server
+ * @param param  payload; api_key / last_latlong / imei dilengkapi pada jalur transport
  * @param options signal untuk membatalkan permintaan (mis. saat pindah halaman)
  */
 export const rpc = async <T = any>(
@@ -136,21 +145,37 @@ const kirimRpc = async <T = any>(
   param: BaseRpcParam = {},
   options: { signal?: AbortSignal } = {}
 ): Promise<T | null> => {
-  const url = apiUrl('/api/rpc');
   const startedAt = performance.now();
   const requestTimestamp = new Date().toISOString();
   const body: RpcRequestBody = { object, param };
 
-  let response: Response;
+  let responseText: string;
+  let responseStatus: number;
+  let responseOk: boolean;
   try {
-    response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(body),
-      signal: options.signal,
-    });
+    if (berjalanDiTauri()) {
+      if (options.signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+      const native = await invoke<NativeHttpResponse>('presensi_rpc', {
+        object,
+        param: body.param ?? {},
+      });
+      if (options.signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+      responseText = native.body;
+      responseStatus = native.status;
+      responseOk = responseStatus >= 200 && responseStatus < 300;
+    } else {
+      const response = await fetch(apiUrl('/api/rpc'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+        signal: options.signal,
+      });
+      responseText = await response.text();
+      responseStatus = response.status;
+      responseOk = response.ok;
+    }
   } catch (fetchErr: any) {
     const message = `Koneksi gagal: ${fetchErr?.message ?? 'tidak diketahui'}`;
     publishApiTraffic({
@@ -163,9 +188,7 @@ const kirimRpc = async <T = any>(
     throw new Error(message);
   }
 
-  const responseText = await response.text();
-
-  if (!response.ok) {
+  if (!responseOk) {
     let errorMessage: string | null = null;
     try {
       const errJson = JSON.parse(responseText);
@@ -175,12 +198,12 @@ const kirimRpc = async <T = any>(
     } catch {
       // abaikan, pakai pesan generik
     }
-    const message = errorMessage || `HTTP Error ${response.status}: ${responseText.slice(0, 200)}`;
+    const message = errorMessage || `HTTP Error ${responseStatus}: ${responseText.slice(0, 200)}`;
     publishApiTraffic({
       endpoint: object,
       payload: body,
       error: message,
-      status: response.status,
+      status: responseStatus,
       duration: Math.round(performance.now() - startedAt),
       timestamp: requestTimestamp,
     });
@@ -221,7 +244,7 @@ const kirimRpc = async <T = any>(
       endpoint: object,
       payload: body,
       error: parsed.error,
-      status: parsed.errorCode ?? response.status,
+      status: parsed.errorCode ?? responseStatus,
       duration: Math.round(performance.now() - startedAt),
       timestamp: requestTimestamp,
     });
@@ -233,7 +256,7 @@ const kirimRpc = async <T = any>(
     endpoint: object,
     payload: body,
     response: parsed,
-    status: response.status,
+    status: responseStatus,
     duration: Math.round(performance.now() - startedAt),
     timestamp: requestTimestamp,
   });
@@ -243,10 +266,11 @@ const kirimRpc = async <T = any>(
 };
 
 /**
- * Teruskan satu request `multipart/form-data` ke proxy `/api/upload`.
+ * Teruskan satu request multipart untuk lampiran izin. APK memakai HTTP
+ * native Tauri; browser tetap melalui proxy `/api/upload`.
  *
  * ⚠️ Endpoint ini hanya untuk `POST /importfile` — lampiran pengajuan
- * izin. Semua fungsi lain lewat `rpc()` (JSON-RPC ke `/api/rpc`).
+ * izin. Semua panggilan JSON-RPC fitur presensi memakai `rpc()`.
  * Bentuk field-nya disalin apa adanya dari
  * `PerizinanFragment$uploadImage$multipartRequest$1` (APK v89):
  * `api_key`, `id`, `last_latlong` (kosong), `type` = "ijin", dan part
@@ -262,19 +286,46 @@ export const uploadMultipart = async <T = any>(
   path: string,
   parts: Record<string, string | File>
 ): Promise<T | null> => {
-  const url = `/api/upload?path=${encodeURIComponent(path)}`;
   const startedAt = performance.now();
   const requestTimestamp = new Date().toISOString();
 
-  const form = new FormData();
-  Object.entries(parts).forEach(([name, value]) => {
-    form.append(name, value);
-  });
+  let responseText: string;
+  let responseStatus: number;
+  if (berjalanDiTauri()) {
+    const files = Object.values(parts).filter((value): value is File => value instanceof File);
+    if (files.length !== 1) {
+      throw new Error('Unggahan lampiran harus berisi tepat satu berkas.');
+    }
+    const file = files[0];
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    let binary = '';
+    const chunkSize = 0x8000;
+    for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+      binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize));
+    }
+    const native = await invoke<NativeHttpResponse>('presensi_upload', {
+      path,
+      fields: Object.fromEntries(
+        Object.entries(parts).filter((entry): entry is [string, string] => typeof entry[1] === 'string')
+      ),
+      fileName: file.name,
+      mimeType: file.type || 'application/octet-stream',
+      base64Data: btoa(binary),
+    });
+    responseText = native.body;
+    responseStatus = native.status;
+  } else {
+    const form = new FormData();
+    Object.entries(parts).forEach(([name, value]) => form.append(name, value));
+    // Browser menambahkan boundary multipart sendiri.
+    const response = await fetch(`/api/upload?path=${encodeURIComponent(path)}`, {
+      method: 'POST',
+      body: form,
+    });
+    responseText = await response.text();
+    responseStatus = response.status;
+  }
 
-  // ⚠️ Jangan set Content-Type: browser yang menambahkan boundary.
-  const response = await fetch(url, { method: 'POST', body: form });
-
-  const responseText = await response.text();
   let parsed: any = null;
   try {
     parsed = JSON.parse(responseText);
@@ -282,18 +333,18 @@ export const uploadMultipart = async <T = any>(
     throw new Error(`Respons unggah tidak valid (${responseText.slice(0, 200)})`);
   }
 
-  if (!response.ok || parsed.error) {
+  if (responseStatus < 200 || responseStatus >= 300 || parsed.error) {
     // Proxy meratakan `error` gateway jadi objek { message, code }, jadi
     // pesannya harus diambil dari sana — bukan di-string-ify-mentah.
     const message =
       parsed.error && typeof parsed.error === 'object'
         ? `Gateway menolak unggahan: ${parsed.error.message ?? 'tidak diketahui'}`
-        : parsed.error || parsed.message || `HTTP ${response.status}`;
+        : parsed.error || parsed.message || `HTTP ${responseStatus}`;
     publishApiTraffic({
       endpoint: `POST ${path}`,
       payload: { parts: Object.keys(parts) },
       error: message,
-      status: parsed.errorCode ?? response.status,
+      status: parsed.errorCode ?? responseStatus,
       duration: Math.round(performance.now() - startedAt),
       timestamp: requestTimestamp,
     });
@@ -304,11 +355,10 @@ export const uploadMultipart = async <T = any>(
     endpoint: `POST ${path}`,
     payload: { parts: Object.keys(parts) },
     response: parsed,
-    status: response.status,
+    status: responseStatus,
     duration: Math.round(performance.now() - startedAt),
     timestamp: requestTimestamp,
   });
 
   return (parsed.result ?? null) as T | null;
 };
-

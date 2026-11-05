@@ -12,12 +12,11 @@
  * - `db` bernilai `null` selamanya,
  * - `requireDb()` melempar "Firebase belum dikonfigurasi" untuk setiap
  *   pembacaan,
- * - setiap pembacaan punya `catch` yang mengembalikan nilai cadangan,
- * - hasilnya: `loadPengaturanBilling()` selalu mengembalikan paket bawaan,
- *   `loadLangganan()` selalu `null`, `loadTagihan()` selalu `[]`.
+ * - pembacaan error ditelan dan disamarkan sebagai nilai cadangan,
+ * - hasilnya, status akun tidak dapat dibedakan dari data kosong.
  *
- * Tidak ada error yang terlihat. Gate langganan berjalan sempurna dengan data
- * kosong — setiap akun terbaca "belum bayar" dan tidak ada yang bisa membayar.
+ * Gate langganan kini meneruskan kegagalan dan tidak meloloskan pengguna
+ * sebelum server memastikan status akun.
  *
  * ## Perbaikannya
  *
@@ -27,7 +26,7 @@
  * - `firestore.rules` membiarkan `jatim_langganan` dan `jatim_tagihan` dengan
  *   `allow read: if true`, dan aplikasi ini tidak memakai Firebase Auth — jadi
  *   `request.auth` selalu `null` dan `if true` berarti seluruh koleksi terbuka
- *   untuk siapa pun yang punya API key. API key-nya ada di bundle peramban.
+ *   untuk siapa pun.
  * - `firebase/firestore` 140 kB gzip, 35% bundle, dan tidak dibutuhkan lagi.
  *
  * Sekarang semua pembacaan lewat `POST /api/panel-auth`, yang memverifikasi
@@ -36,7 +35,7 @@
  * Uji di bawah menjaga supaya tidak ada jalur Firestore yang diam-diam muncul
  * lagi lewat nama baru.
  */
-import { readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
 const root = new URL('..', import.meta.url).pathname.replace(/\/$/, '');
@@ -75,17 +74,12 @@ cek(
   pemakaiSdk.map(f => f.replace(`${root}/`, '')).join(', ')
 );
 
-// ═══ 2. `firebase.ts` tidak lagi memuat SDK ═════════════════════════
+// ═══ 2. Tidak ada konfigurasi Firebase client yang tidak digunakan ═══
 
-const firebaseSrc = kode(baca('src/lib/firebase.ts'));
-cek('firebase.ts tidak memanggil import() dinamis apa pun', !/await import\(/.test(firebaseSrc),
-  'SDK-nya 140 kB gzip dan tidak dibutuhkan lagi');
-cek('firebase.ts tidak mengekspor `let db`', !/export\s+let\s+db\b/.test(firebaseSrc),
-  'ekspor `let` membuat pemanggil statis melihat nilai basi');
-cek('firebase.ts tidak mengekspor db sebagai nilai', !/export\s+(const|let)\s+db\b/.test(firebaseSrc));
-cek('firebase.ts tidak mengekspor instance Firestore', !/Firestore/.test(firebaseSrc),
-  'tidak ada yang memakai instance anymore');
-cek('firebase.ts hanya mengekspor isFirebaseReady', /export const isFirebaseReady/.test(firebaseSrc));
+cek('modul Firebase client yang tidak dipakai sudah dihapus',
+  !existsSync(join(root, 'src/lib/firebase.ts')));
+cek('env Firebase client tidak lagi di-bundle',
+  !/VITE_FIREBASE_/.test(baca('src/vite-env.d.ts')));
 
 // ═══ 3. Pembacaan langganan lewat server ════════════════════════════
 
@@ -99,9 +93,9 @@ cek(
   /loadLangganan\([\s\S]{0,200}?username: string[\s\S]{0,120}?void username;/.test(langgananSrc),
   'kalau username diteruskan, satu akun bisa mengarahkan pembacaan ke dokumen orang lain'
 );
-cek('polling langganan meneruskan galat sementara tanpa menelan status',
-  /teruskanGalatJaringan = false[\s\S]{0,180}?teruskanGalatJaringan\s*\?\s*await panelBatal/.test(langgananSrc),
-  'kegagalan jaringan tidak boleh berubah menjadi langganan kosong dan mengunci pengguna');
+cek('loadLangganan meneruskan galat jaringan',
+  /export async function loadLangganan\(username: string\)[\s\S]{0,180}?await panelBatal/.test(langgananSrc),
+  'kegagalan jaringan tidak boleh berubah menjadi status langganan kosong');
 
 // ═══ 4. Sisi server memverifikasi token ═════════════════════════════
 
