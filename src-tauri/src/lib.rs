@@ -277,6 +277,22 @@ fn simpan_cookie(headers: &reqwest::header::HeaderMap, jar: &mut HashMap<String,
     }
 }
 
+fn header_value(
+    value: Option<String>,
+    fallback: &str,
+    max_length: usize,
+    label: &str,
+) -> Result<reqwest::header::HeaderValue, String> {
+    let value = value
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| fallback.to_string());
+    if value.len() > max_length {
+        return Err(format!("Header {label} terlalu panjang."));
+    }
+    reqwest::header::HeaderValue::from_str(&value)
+        .map_err(|_| format!("Header {label} tidak valid."))
+}
+
 #[tauri::command(rename_all = "camelCase")]
 async fn web_presensi_request(
     session: State<'_, WebPresensiSession>,
@@ -284,6 +300,8 @@ async fn web_presensi_request(
     method: String,
     body: Option<String>,
     content_type: Option<String>,
+    user_agent: Option<String>,
+    accept_language: Option<String>,
 ) -> Result<Value, String> {
     let mut target_path = target_web_path(&path)?;
     let mut method = reqwest::Method::from_bytes(method.as_bytes())
@@ -300,6 +318,13 @@ async fn web_presensi_request(
         .redirect(reqwest::redirect::Policy::none())
         .build()
         .map_err(|error| format!("Gagal menyiapkan koneksi Web Presensi: {error}"))?;
+    let user_agent = header_value(user_agent, "PRABAWA-Tauri/1.0", 512, "User-Agent")?;
+    let accept_language = header_value(
+        accept_language,
+        "id-ID,id;q=0.9,en;q=0.8",
+        256,
+        "Accept-Language",
+    )?;
     let mut body = body;
 
     for redirect_count in 0..=10 {
@@ -307,6 +332,8 @@ async fn web_presensi_request(
         let mut request = client
             .request(method.clone(), &url)
             .header(reqwest::header::ACCEPT, "*/*")
+            .header(reqwest::header::USER_AGENT, &user_agent)
+            .header(reqwest::header::ACCEPT_LANGUAGE, &accept_language)
             .header(reqwest::header::REFERER, format!("{EPRESENSI_ORIGIN}/"))
             .header(reqwest::header::ORIGIN, EPRESENSI_ORIGIN);
         if let Some(content_type) = content_type.as_deref() {
@@ -453,6 +480,10 @@ mod tests {
             "/index.php/login"
         );
         assert_eq!(
+            target_web_path("/ep/p/captcha?r=1&reload=1").expect("valid captcha path"),
+            "/index.php/captcha?r=1&reload=1"
+        );
+        assert_eq!(
             target_web_path("/ep/uploads/file.pdf").expect("valid file path"),
             "/uploads/file.pdf"
         );
@@ -498,5 +529,18 @@ mod tests {
         );
         simpan_cookie(&headers, &mut jar);
         assert!(!jar.contains_key("epresensi-bkdjatim"));
+    }
+
+    #[test]
+    fn web_presensi_headers_reject_invalid_values_and_use_defaults() {
+        assert_eq!(
+            header_value(None, "PRABAWA-Tauri/1.0", 512, "User-Agent")
+                .expect("default user agent")
+                .to_str()
+                .expect("valid header"),
+            "PRABAWA-Tauri/1.0"
+        );
+        assert!(header_value(Some("bad\r\nheader".into()), "default", 512, "User-Agent").is_err());
+        assert!(header_value(Some("x".repeat(513)), "default", 512, "User-Agent").is_err());
     }
 }

@@ -1726,7 +1726,7 @@ cek('tokenAktif tersedia untuk modul lain', /export function tokenAktif/.test(se
 cek('perbaruiTokenSesi tersedia', /export function perbaruiTokenSesi/.test(sesSrc));
 
 // ═════════════════════════════════════════════════════════════════════
-console.log('\n=== 9. Password server pusat tidak pernah di peramban');
+console.log('\n=== 9. Login server pusat native dan pembatasan kredensial akun');
 const panelSrc = kode('src/lib/panelServer.ts');
 cek('autoLoginPusat ada di server', /export async function autoLoginPusat/.test(panelSrc));
 cek('server yang mendekripsi kredensial', /dekripsi\(String\(data\.passwordEncrypted/.test(panelSrc));
@@ -1736,12 +1736,14 @@ cek('kredensial dienkripsi dengan kunci turunan server',
 
 const autoSrc = kode('src/lib/serverAutoLogin.ts');
 cek('auto-login tidak mendekripsi password di peramban', !/decryptAppCredential/.test(autoSrc));
-cek('auto-login tidak memanggil rpcLogin sendiri', !/\brpcLogin\b/.test(autoSrc));
-cek('auto-login memakai endpoint server', /autoLoginServerPusat/.test(autoSrc));
+cek('APK mengirim login langsung lewat RPC native',
+  /berjalanDiTauri\(\)[\s\S]*?rpcLogin\(/.test(autoSrc));
+cek('browser tetap memakai endpoint login server', /autoLoginServerPusat/.test(autoSrc));
 cek('password Web hanya tersedia lewat aksi server khusus akun sendiri',
   /export async function kredensialWebSendiri/.test(panelSrc) &&
     /const akun = await akunDariToken\(token\)/.test(panelSrc) &&
-    /case 'kredensial:web-sendiri'/.test(kode('src/serverless/_panel.ts')));
+    /case 'kredensial:web-sendiri'/.test(kode('src/serverless/_panel.ts')) &&
+    /imei: String\(data\.imei \?\? ''\)/.test(panelSrc));
 cek('Web mengisi NIP/password tersimpan dan tetap memberi ruang edit',
   /kredensialWebSendiri\(\)/.test(webSrc) &&
     /!nipDiubahManual\.current/.test(webSrc) &&
@@ -1897,7 +1899,8 @@ cek('ringkasan target melaporkan password bisa dibaca',
 const kredensialWebBudi = await P.kredensialWebSendiri(tokenBudi);
 cek('form Web menerima kredensial akun sendiri',
   kredensialWebBudi.ok && kredensialWebBudi.kredensial?.nip === CRED.budi.nip &&
-    kredensialWebBudi.kredensial?.password === CRED.budi.sandi);
+    kredensialWebBudi.kredensial?.password === CRED.budi.sandi &&
+    kredensialWebBudi.kredensial?.imei === CRED.budi.imei);
 const kredensialWebTanpaSesi = await P.kredensialWebSendiri('token-tidak-valid');
 cek('form Web tidak menerima kredensial tanpa sesi sah',
   !kredensialWebTanpaSesi.ok && kredensialWebTanpaSesi.kode === 401);

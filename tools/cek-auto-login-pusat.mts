@@ -241,8 +241,8 @@ cek('PanelAuthError meng-assign name-nya',
   'tanpa ini, name tidak pernah sama dan helper selalu mengembalikan 0');
 
 cek('auto-login tidak mendekripsi password sendiri', !/decryptAppCredential/.test(src));
-cek('auto-login tidak memanggil gateway sendiri', !/\brpcLogin\s*\(/.test(src));
-cek('auto-login memakai endpoint server', /autoLoginServerPusat/.test(src));
+cek('APK mengirim login pusat melalui RPC native', /berjalanDiTauri\(\)[\s\S]*?rpcLogin\(/.test(src));
+cek('browser tetap memakai endpoint login server', /autoLoginServerPusat/.test(src));
 cek('kode 402 dipetakan ke terkunci-perangkat',
   /kode === 402[\s\S]{0,120}terkunci-perangkat/.test(src));
 cek('404 & 422 dipetakan ke belum-ada-kredensial',

@@ -454,9 +454,10 @@ export async function ringkasanKredensial(
 export interface KredensialWebSendiri {
   nip: string;
   password: string;
+  imei: string;
 }
 
-/** Kredensial Web akun yang sedang login, hanya untuk formulir saat ini. */
+/** Kredensial akun sendiri untuk formulir Web dan login native Tauri. */
 export async function kredensialWebSendiri(): Promise<KredensialWebSendiri | null> {
   try {
     const hasil = await panel<{ kredensial?: KredensialWebSendiri }>('kredensial:web-sendiri');

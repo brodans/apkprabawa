@@ -1004,7 +1004,7 @@ async function kredensialWebSendiri(token) {
   if (!nip || password === null) {
     return { ok: false, kode: 422, pesan: "Password server tersimpan tidak dapat dibaca. Simpan ulang kredensial." };
   }
-  return { ok: true, kode: 200, kredensial: { nip, password } };
+  return { ok: true, kode: 200, kredensial: { nip, password, imei: String(data.imei ?? "") } };
 }
 async function ringkasSemuaKredensial(token) {
   const pemanggil = await akunDariToken(token);

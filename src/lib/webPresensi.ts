@@ -49,6 +49,8 @@ async function req(url: string, opts: RequestInit = {}): Promise<Response> {
         method: opts.method || 'GET',
         body,
         contentType: headers.get('content-type'),
+        userAgent: navigator.userAgent,
+        acceptLanguage: navigator.languages?.join(',') || navigator.language,
       });
       const responseHeaders = new Headers();
       if (result.contentType) responseHeaders.set('content-type', result.contentType);

@@ -1406,7 +1406,7 @@ export async function ringkasKredensial(
  */
 export async function kredensialWebSendiri(
   token: string | undefined | null
-): Promise<HasilAksi & { kredensial?: { nip: string; password: string } }> {
+): Promise<HasilAksi & { kredensial?: { nip: string; password: string; imei: string } }> {
   const akun = await akunDariToken(token);
   if (!akun) return { ok: false, kode: 401, pesan: 'Sesi tidak valid. Login ulang.' };
 
@@ -1425,7 +1425,7 @@ export async function kredensialWebSendiri(
     return { ok: false, kode: 422, pesan: 'Password server tersimpan tidak dapat dibaca. Simpan ulang kredensial.' };
   }
 
-  return { ok: true, kode: 200, kredensial: { nip, password } };
+  return { ok: true, kode: 200, kredensial: { nip, password, imei: String(data.imei ?? '') } };
 }
 
 /**

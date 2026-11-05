@@ -175,20 +175,14 @@ export type HasilLogin =
     };
 
 /**
- * object: "login"  NIP + password.
+ * object: "login" — NIP + password.
  *
- *  **Dipakai server, bukan peramban.** Jangan dipanggil dari UI.
+ * Untuk APK, panggilan ini dijalankan melalui HTTP native Rust. Untuk
+ * browser, pemanggil tetap harus memakai auto-login server agar password
+ * tidak dikirim ke JavaScript.
  *
- * Auto-login ke server pusat sekarang lewat aksi `pusat:login` di
- * `POST /api/panel-auth`: server yang mendekripsi password dan memanggil
- * gateway. Kalau peramban yang melakukannya, password server pusat setiap
- * pengguna harus ada di peramban  dan kuncinya ada di bundle, jadi seluruh
- * password itu bisa diambil dari Firebase Console.
- *
- * Fungsinya tetap dipakai karena dua hal: (1) bentuk envelopenya adalah kontrak
- * yang harus sama persis dengan yang dikirim server, dan (2) `tools/cek-payload-absen.mts`
- * memverifikasi bentuk itu. Keduanya beri nilai **pakai fungsi ini** di dalam
- * `panelServer.ts`  bukan implementasi terpisah yang bisa melenceng diam-diam.
+ * Bentuk envelope-nya diverifikasi `tools/cek-payload-absen.mts`; pemanggil
+ * native memakai fungsi ini agar kontrak login sama dengan RPC lain.
  *
  * Wajib: `email` (NIP), `password`, `latlong`, `imei`. Tanpa `latlong`
  * atau `imei` server membalas `-32602 Invalid params`.

@@ -63,6 +63,10 @@ import { getServerSessionCache, setServerSessionCache } from './cacheManager';
 import { absenTimeoutMs } from './presensiContract';
 import { fotoProfileValid } from './viewModels';
 
+function berjalanDiTauri(): boolean {
+  return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+}
+
 /** Penanda "pengguna keluar dari server" per akun panel, di localStorage. */
 const KELUAR_KEY_PREFIX = 'epresensi_jatim_server_keluar_';
 /** TechMark stabil per akun panel  nilai `imei` yang konsisten. */
@@ -350,8 +354,9 @@ function profilDariCache(
  * Coba sambungkan ke server pusat untuk satu akun panel.
  *
  * Urutannya: cache lokal dulu (murah, tanpa jaringan), lalu kredensial
- * terenkripsi. `signal` dipakai pemanggil supaya hasil yang datang
- * terlambat bisa diabaikan saat pengguna sudah berpindah akun.
+ * terenkripsi. APK mengambil kredensial akun sendiri lewat endpoint panel
+ * lalu login langsung melalui HTTP Rust; browser tetap memakai login
+ * server-side. `signal` mengabaikan hasil terlambat saat akun berubah.
  */
 export async function cobaAutoLogin(
   username: string,
@@ -371,37 +376,67 @@ export async function cobaAutoLogin(
     }
   }
 
-  // 2. Login ke server pusat lewat server aplikasi.
+  // 2. Login ke server pusat.
   //
-  //  Yang berubah: password server pusat **tidak lagi melewati peramban**.
+  // Pada APK, kredensial milik sendiri dibaca lewat endpoint Firebase/auth,
+  // lalu RPC login dikirim langsung oleh transport Rust ke server pusat.
+  // Browser tetap memakai server aplikasi agar password tidak masuk ke JS.
   //
   // Semula langkah ini membaca `kredensial_server__{username}` langsung dari
   // Firestore dan mendekripsi password di browser dengan kunci yang ada di
-  // bundle, jadi seluruh password server pusat bisa
-  // diambil dari Firebase Console lalu didekripsi di luar aplikasi. Sekarang
-  // server mendekripsi dan memanggil gateway; yang kembali ke sini hanya
-  // `api_key` dan profil.
+  // bundle, jadi seluruh password server pusat bisa diambil dari Firebase
+  // Console lalu didekripsi di luar aplikasi. Server tetap mendekripsi
+  // kredensial; pada Tauri hanya kredensial akun pemanggil yang dikirim ke
+  // proses native untuk membuat koneksi langsung ke gateway.
   //
   // Impor dinamis: `akunFirestore` menarik modul lain dan modul ini ada di
   // jalur muat awal. Auto-login ke server pusat hanya perlu ketika cache lokal
   // ditolak, jadi tidak perlu diunduh lebih dulu.
   let imei = imeiStabil(username);
   try {
-    /*
-     * Impor dinamis, bukan statis di atas.
-     *
-     * Modul ini ada di jalur muat awal, dan `akunFirestore` menarik modul lain
-     * yang ikut menambah ukuran muat awal. Auto-login ke server pusat baru
-     * dibutuhkan kalau cache lokal ditolak  jadi SDK-nya tidak perlu diunduh
-     * sebelum orang sempat melihat aplikasinya.
-     *
-     */
-    const { autoLoginServerPusat } = await import('./akunFirestore');
-    const hasil = await autoLoginServerPusat(username, imei);
-    if (sudahBatal()) return { status: 'gagal', imei, pesan: 'Dibatalkan.' };
-
-    const profilPusat = hasil.profil as unknown as ProfilPegawai;
-    const profile = toPegawaiProfile({ ...profilPusat, api_key: hasil.apiKey }, imei);
+    // Impor dinamis agar modul panel dan RPC tidak masuk ke bundle awal.
+    let profilPusat: ProfilPegawai;
+    if (berjalanDiTauri()) {
+      const [{ kredensialWebSendiri }, { rpcLogin }] = await Promise.all([
+        import('./akunFirestore'),
+        import('./apiCalls'),
+      ]);
+      const kredensial = await kredensialWebSendiri();
+      if (!kredensial) {
+        return {
+          status: 'belum-ada-kredensial',
+          imei: '',
+          pesan: 'Kredensial server pusat belum diatur atau perlu disimpan ulang.',
+        };
+      }
+      imei = kredensial.imei || imei;
+      const hasil = await rpcLogin(kredensial.nip, kredensial.password, {
+        imei,
+        signal: options.signal,
+      });
+      if (sudahBatal()) return { status: 'gagal', imei, pesan: 'Dibatalkan.' };
+      if (!hasil.ok) {
+        if (hasil.kode === 402) {
+          return {
+            status: 'terkunci-perangkat',
+            imei,
+            pesan:
+              'Akun ini terdaftar di perangkat lain. Isi kolom IMEI di Beranda dengan androidId perangkat aslinya.',
+          };
+        }
+        if (hasil.kode === 401) {
+          return { status: 'kredensial-salah', imei, pesan: hasil.pesan };
+        }
+        return { status: 'gagal', imei, pesan: hasil.pesan };
+      }
+      profilPusat = { ...hasil.data, nip: kredensial.nip };
+    } else {
+      const { autoLoginServerPusat } = await import('./akunFirestore');
+      const hasil = await autoLoginServerPusat(username, imei);
+      if (sudahBatal()) return { status: 'gagal', imei, pesan: 'Dibatalkan.' };
+      profilPusat = { ...hasil.profil, api_key: hasil.apiKey } as unknown as ProfilPegawai;
+    }
+    const profile = toPegawaiProfile(profilPusat, imei);
     simpanSesi(username, profile, imei);
     return { status: 'berhasil', profile, imei };
   } catch (err: any) {
