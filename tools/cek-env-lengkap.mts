@@ -165,11 +165,14 @@ for (const nama of terdaftar) {
 }
 
 const androidWorkflow = readFileSync(join(root, '.github/workflows/tauri-android.yml'), 'utf8');
-cek('workflow Android hanya membaca GitHub secrets tanpa vars/fallback',
-  !/\bvars\./.test(androidWorkflow) && !/\$\{\{[^}]*\|\|[^}]*\}\}/.test(androidWorkflow));
+cek('workflow Android memakai vars untuk konfigurasi publik dan tidak memiliki fallback',
+  ['VITE_API_BASE_URL', 'VITE_MIDTRANS_CLIENT_KEY', 'VITE_MIDTRANS_IS_PRODUCTION'].every(nama =>
+    new RegExp(`${nama}:\\s*\\$\\{\\{\\s*vars\\.${nama}\\s*\\}\\}`).test(androidWorkflow)
+  ) &&
+  !/\$\{\{[^}]*\|\|[^}]*\}\}/.test(androidWorkflow));
 for (const nama of ['VITE_API_BASE_URL', 'VITE_MIDTRANS_CLIENT_KEY', 'VITE_MIDTRANS_IS_PRODUCTION']) {
-  cek(`${nama} berasal dari GitHub secret`,
-    new RegExp(`${nama}:\\s*\\$\\{\\{\\s*secrets\\.${nama}\\s*\\}\\}`).test(androidWorkflow));
+  cek(`${nama} berasal dari GitHub Actions variable`,
+    new RegExp(`${nama}:\\s*\\$\\{\\{\\s*vars\\.${nama}\\s*\\}\\}`).test(androidWorkflow));
 }
 const kodeDanWorkflow = walkSrc()
   .map(f => readFileSync(f, 'utf8'))

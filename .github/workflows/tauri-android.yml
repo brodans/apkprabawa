@@ -17,11 +17,11 @@ jobs:
       ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
       ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
       ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-      VITE_MIDTRANS_CLIENT_KEY: ${{ secrets.VITE_MIDTRANS_CLIENT_KEY }}
-      VITE_MIDTRANS_IS_PRODUCTION: ${{ secrets.VITE_MIDTRANS_IS_PRODUCTION }}
-      VITE_API_BASE_URL: ${{ secrets.VITE_API_BASE_URL }}
+      VITE_MIDTRANS_CLIENT_KEY: ${{ vars.VITE_MIDTRANS_CLIENT_KEY }}
+      VITE_MIDTRANS_IS_PRODUCTION: ${{ vars.VITE_MIDTRANS_IS_PRODUCTION }}
+      VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
     steps:
-      - name: Validate required GitHub secrets
+      - name: Validate required GitHub secrets and variables
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
         shell: bash
@@ -31,9 +31,9 @@ jobs:
           [[ -n "$ANDROID_KEYSTORE_PASSWORD" ]] || missing+=("ANDROID_KEYSTORE_PASSWORD")
           [[ -n "$ANDROID_KEY_ALIAS" ]] || missing+=("ANDROID_KEY_ALIAS")
           [[ -n "$ANDROID_KEY_PASSWORD" ]] || missing+=("ANDROID_KEY_PASSWORD")
-          [[ -n "$VITE_API_BASE_URL" ]] || missing+=("VITE_API_BASE_URL")
+          [[ -n "$VITE_API_BASE_URL" ]] || missing+=("VITE_API_BASE_URL (Actions variable)")
           if (( ${#missing[@]} > 0 )); then
-            echo "::error::Missing required GitHub Actions secrets: ${missing[*]}"
+            echo "::error::Missing required GitHub Actions configuration: ${missing[*]}"
             exit 1
           fi
       - uses: actions/checkout@v4
